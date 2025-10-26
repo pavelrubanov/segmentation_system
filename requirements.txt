@@ -1,0 +1,8 @@
+torch
+torchvision
+git+https://github.com/ChaoningZhang/MobileSAM.git
+PyQt5
+matplotlib
+Pillow
+numpy
+timm
