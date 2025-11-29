@@ -2,14 +2,15 @@
 # -*- coding: utf-8 -*-
 
 """
-Minimal interactive SAM UI (MobileSAM version)
+Minimal interactive SAM UI (MobileSAM version) + points + boxes одновременно
 
-Фичи:
-  - левая кнопка мыши = ПОЛОЖИТЕЛЬНАЯ точка (зелёная)
-  - правая кнопка мыши  = ОТРИЦАТЕЛЬНАЯ точка (красная)
-  - Load Image: загрузить изображение
-  - Clean Points: очистить точки и маску
-  - Save Mask: сохранить текущую маску в PNG (0/255)
+Управление:
+  - ЛКМ клик      = ПОЛОЖИТЕЛЬНАЯ точка (зелёная)
+  - ПКМ клик      = ОТРИЦАТЕЛЬНАЯ точка (красная)
+  - ЛКМ drag      = BOX (жёлтый прямоугольник)
+  - Load Image    = загрузить изображение
+  - Clean         = очистить точки/box/маску
+  - Save Mask     = сохранить текущую маску в PNG (0/255)
 
 Зависимости:
   pip install torch torchvision
@@ -34,14 +35,18 @@ import matplotlib
 matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.widgets import RectangleSelector
+import matplotlib.patches as mpatches
+
 from mobile_sam import sam_model_registry, SamPredictor
 
 
 class ImageCanvas(FigureCanvas):
     """
     Matplotlib canvas внутри PyQt5.
-    Показывает картинку, точки и текущую маску.
-    Ловит клики мыши и кидает наверх (в MainWindow.add_point).
+    Показывает картинку, точки, box и текущую маску.
+    - ЛКМ drag: RectangleSelector -> box
+    - ЛКМ/ПКМ click: точки (через press+release, чтобы не ставить точку при drag)
     """
 
     def __init__(self, controller):
@@ -50,148 +55,245 @@ class ImageCanvas(FigureCanvas):
         fig = Figure()
         self.ax = fig.add_subplot(111)
         self.ax.set_axis_off()
-
         super().__init__(fig)
-        # запретить дефолтное контекстное меню матплотлиба на правый клик
+
         self.setContextMenuPolicy(QtCore.Qt.PreventContextMenu)
 
-        # подписываемся на клики
-        self.mpl_connect("button_press_event", self.on_click)
+        # состояние для click-vs-drag
+        self._press = None  # (x_px, y_px, button, xdata, ydata)
 
-        # данные для отображения
+        # события мыши
+        self.mpl_connect("button_press_event", self.on_press)
+        self.mpl_connect("button_release_event", self.on_release)
+
+        # данные
         self.image = None       # np.uint8 [H,W,3]
         self.mask = None        # np.uint8 [H,W] 0/1
-        self.pos_points = []    # list of (x,y)
-        self.neg_points = []    # list of (x,y)
+        self.pos_points = []    # list[(x,y)]
+        self.neg_points = []    # list[(x,y)]
+        self.box = None         # (x0,y0,x1,y1) or None
 
-    def on_click(self, event):
+        # artists (чтобы не делать ax.clear() каждый раз)
+        self.img_artist = None
+        self.mask_artist = None
+        self.pos_scatter = None
+        self.neg_scatter = None
+        self.box_patch = None
+
+        # RectangleSelector всегда активен, только ЛКМ-drag
+        # minspanx/minspany в координатах данных (тут ~ пиксели изображения)
+        self.rect_selector = RectangleSelector(
+            self.ax,
+            self.on_box_select,
+            useblit=True,
+            button=[1],
+            interactive=False,
+            spancoords="data",
+            minspanx=5,
+            minspany=5,
+        )
+        self.rect_selector.set_active(True)
+
+    # ---------- Input handling ----------
+
+    def on_press(self, event):
+        if event.inaxes != self.ax:
+            self._press = None
+            return
+        if event.xdata is None or event.ydata is None:
+            self._press = None
+            return
+        # event.x/event.y — пиксели экрана; удобно мерять смещение
+        self._press = (float(event.x), float(event.y), int(event.button), float(event.xdata), float(event.ydata))
+
+    def on_release(self, event):
         """
-        Mouse click handler.
-        event.button: 1=левый, 3=правый (на большинстве систем)
-        Мы интерпретируем:
-          левый -> положительная точка (label=1)
-          правый  -> отрицательная точка (label=0)
+        Ставим точки только если это клик (малое смещение).
+        Если это drag ЛКМ, RectangleSelector сам вызовет on_box_select(...)
         """
+        if self._press is None:
+            return
         if event.inaxes != self.ax:
             return
         if event.xdata is None or event.ydata is None:
             return
 
+        x0_px, y0_px, button, _, _ = self._press
+        dx = abs(float(event.x) - x0_px)
+        dy = abs(float(event.y) - y0_px)
+
+        CLICK_THR_PX = 3.0
+        is_click = (dx <= CLICK_THR_PX and dy <= CLICK_THR_PX)
+        if not is_click:
+            return  # drag
+
         x = float(event.xdata)
         y = float(event.ydata)
 
-        if event.button == 1:
+        # 1=ЛКМ -> positive, 3=ПКМ -> negative
+        if button == 1:
             self.controller.add_point((x, y), positive=True)
-        elif event.button == 3:
+        elif button == 3:
             self.controller.add_point((x, y), positive=False)
 
+    def on_box_select(self, eclick, erelease):
+        if eclick.xdata is None or eclick.ydata is None:
+            return
+        if erelease.xdata is None or erelease.ydata is None:
+            return
+
+        x0, y0 = float(eclick.xdata), float(eclick.ydata)
+        x1, y1 = float(erelease.xdata), float(erelease.ydata)
+
+        xmin, xmax = (x0, x1) if x0 <= x1 else (x1, x0)
+        ymin, ymax = (y0, y1) if y0 <= y1 else (y1, y0)
+
+        # safety: хотя minspan уже стоит, фильтр оставим
+        if abs(xmax - xmin) < 2 or abs(ymax - ymin) < 2:
+            return
+
+        self.controller.set_box((xmin, ymin, xmax, ymax))
+
+    # ---------- Rendering ----------
+
+    def _ensure_artists(self):
+        if self.image is None:
+            return
+
+        if self.img_artist is None:
+            self.img_artist = self.ax.imshow(self.image)
+            self.ax.set_axis_off()
+
+        if self.mask_artist is None:
+            dummy = np.ma.masked_where(np.zeros(self.image.shape[:2], dtype=np.uint8) == 0,
+                                       np.zeros(self.image.shape[:2], dtype=np.uint8))
+            self.mask_artist = self.ax.imshow(
+                dummy, alpha=0.5, cmap="jet", interpolation="nearest", visible=False
+            )
+
+        if self.pos_scatter is None:
+            self.pos_scatter = self.ax.scatter(
+                [], [], c="lime", marker="o", s=60, edgecolors="black", linewidths=1.0
+            )
+
+        if self.neg_scatter is None:
+            self.neg_scatter = self.ax.scatter(
+                [], [], c="red", marker="x", s=60, linewidths=2.0
+            )
+
+        if self.box_patch is None:
+            self.box_patch = mpatches.Rectangle(
+                (0, 0), 1, 1, fill=False, linewidth=2.0, edgecolor="yellow", visible=False
+            )
+            self.ax.add_patch(self.box_patch)
+
     def set_image(self, img_np):
-        """
-        Установить новое изображение и сбросить все аннотации.
-        img_np: np.uint8 [H,W,3] RGB
-        """
         self.image = img_np
         self.mask = None
         self.pos_points = []
         self.neg_points = []
-        self.redraw()
+        self.box = None
 
-    def update_overlay(self, mask, pos_points, neg_points):
-        """
-        Обновить отображаемую маску и точки.
-        mask: np.uint8 [H,W] (0/1) или None
-        pos_points/neg_points: списки (x,y)
-        """
+        # сброс artists (проще и надежнее при смене размера картинки)
+        self.ax.clear()
+        self.ax.set_axis_off()
+        self.img_artist = None
+        self.mask_artist = None
+        self.pos_scatter = None
+        self.neg_scatter = None
+        self.box_patch = None
+
+        # RectangleSelector продолжает быть привязан к self.ax (ось та же),
+        # но после clear() его визуальный прямоугольник исчезает — это нормально.
+
+        self._ensure_artists()
+        self._render()
+        self.draw()
+
+    def update_overlay(self, mask, pos_points, neg_points, box):
         self.mask = mask
         self.pos_points = list(pos_points)
         self.neg_points = list(neg_points)
-        self.redraw()
+        self.box = box
+        self._ensure_artists()
+        self._render()
+        self.draw_idle()
 
     def clear_points_and_mask(self):
-        """
-        Удалить точки и маску, но картинку не трогать.
-        """
         self.mask = None
         self.pos_points = []
         self.neg_points = []
-        self.redraw()
+        self.box = None
+        self._ensure_artists()
+        self._render()
+        self.draw_idle()
 
-    def redraw(self):
-        """
-        Перерисовать ось.
-        """
-        self.ax.clear()
-        self.ax.set_axis_off()
+    def _render(self):
+        if self.image is None:
+            return
 
-        if self.image is not None:
-            self.ax.imshow(self.image)
+        # image
+        self.img_artist.set_data(self.image)
 
-        if self.mask is not None:
-            # наложим маску полупрозрачно
-            # маска у нас бинарная (0/1), превратим в 0..1 alpha.
-            self.ax.imshow(
-                np.ma.masked_where(self.mask == 0, self.mask),
-                alpha=0.5,
-                cmap="jet",
-                interpolation="nearest",
-            )
+        # mask
+        if self.mask is None:
+            self.mask_artist.set_visible(False)
+        else:
+            m = np.ma.masked_where(self.mask == 0, self.mask)
+            self.mask_artist.set_data(m)
+            self.mask_artist.set_visible(True)
 
-        # положительные точки (зелёные кружки)
-        if len(self.pos_points) > 0:
+        # points
+        if self.pos_points:
             xs = [p[0] for p in self.pos_points]
             ys = [p[1] for p in self.pos_points]
-            self.ax.scatter(
-                xs,
-                ys,
-                c="lime",
-                marker="o",
-                s=60,
-                edgecolors="black",
-                linewidths=1.0,
-            )
+            self.pos_scatter.set_offsets(np.column_stack([xs, ys]))
+        else:
+            self.pos_scatter.set_offsets(np.zeros((0, 2)))
 
-        # отрицательные точки (красные крестики)
-        if len(self.neg_points) > 0:
+        if self.neg_points:
             xs = [p[0] for p in self.neg_points]
             ys = [p[1] for p in self.neg_points]
-            self.ax.scatter(
-                xs,
-                ys,
-                c="red",
-                marker="x",
-                s=60,
-                linewidths=2.0,
-            )
+            self.neg_scatter.set_offsets(np.column_stack([xs, ys]))
+        else:
+            self.neg_scatter.set_offsets(np.zeros((0, 2)))
 
-        self.draw()
+        # box
+        if self.box is None:
+            self.box_patch.set_visible(False)
+        else:
+            x0, y0, x1, y1 = self.box
+            self.box_patch.set_bounds(x0, y0, x1 - x0, y1 - y0)
+            self.box_patch.set_visible(True)
 
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, predictor, device):
         super().__init__()
-
         self.setWindowTitle("MobileSAM UI")
 
         self.predictor = predictor
         self.device = device
 
         # состояние
-        self.image_np = None  # np.uint8 [H,W,3]
-        self.pos_points = []  # [(x,y), ...] (right clicks)
-        self.neg_points = []  # [(x,y), ...] (left clicks)
-        self.current_mask = None  # np.uint8 [H,W] 0/1
-        self.image_is_set = False  # был ли predictor.set_image уже вызван
+        self.image_np = None
+        self.pos_points = []
+        self.neg_points = []
+        self.box = None                 # (x0,y0,x1,y1) или None
+        self.current_mask = None        # np.uint8 [H,W] 0/1
+        self.image_is_set = False
 
-        # === UI элементы ===
+        # UI
         self.canvas = ImageCanvas(controller=self)
 
         self.load_btn = QtWidgets.QPushButton("Load Image")
-        self.clean_btn = QtWidgets.QPushButton("Clean Points")
+        self.clean_btn = QtWidgets.QPushButton("Clean")
         self.save_btn = QtWidgets.QPushButton("Save Mask")
 
         self.info_label = QtWidgets.QLabel(
-            "Правый клик = положительная точка (зелёная)\n"
-            "Левый клик = отрицательная точка (красная)"
+            "ЛКМ клик = положительная точка (зелёная)\n"
+            "ПКМ клик = отрицательная точка (красная)\n"
+            "ЛКМ drag = box (жёлтый прямоугольник)"
         )
         self.info_label.setWordWrap(True)
 
@@ -231,43 +333,35 @@ class MainWindow(QtWidgets.QMainWindow):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Выбери изображение", "", "Images (*.png *.jpg *.jpeg *.bmp)"
         )
-        if fname is None or fname == "":
+        if not fname:
             return
 
         pil_img = Image.open(fname).convert("RGB")
-        self.image_np = np.array(pil_img)  # H,W,3 uint8
+        self.image_np = np.array(pil_img)
 
-        # передаём в predictor
         self.predictor.set_image(self.image_np)
         self.image_is_set = True
 
-        # сбрасываем состояние точек/маски
         self.pos_points = []
         self.neg_points = []
+        self.box = None
         self.current_mask = None
 
-        # перерисовать канвас
         self.canvas.set_image(self.image_np)
 
     def on_clean(self):
-        """
-        Удалить все точки и текущую маску, но оставить изображение.
-        """
         self.pos_points = []
         self.neg_points = []
+        self.box = None
         self.current_mask = None
-
         self.canvas.clear_points_and_mask()
 
     def on_save_mask(self):
-        """
-        Сохраняем текущую маску как PNG (0/255).
-        """
         if self.current_mask is None:
             QtWidgets.QMessageBox.warning(
                 self,
                 "Нет маски",
-                "Сначала кликни по изображению, чтобы получить маску.",
+                "Сначала добавь точки и/или box, чтобы получить маску.",
             )
             return
 
@@ -277,82 +371,75 @@ class MainWindow(QtWidgets.QMainWindow):
             "mask.png",
             "PNG (*.png);;All Files (*)",
         )
-        if save_name is None or save_name == "":
+        if not save_name:
             return
 
         mask_img = (self.current_mask * 255).astype(np.uint8)
         Image.fromarray(mask_img).save(save_name)
 
-    def add_point(self, xy, positive):
-        """
-        Вызывается canvas-ом при клике.
-        xy = (x, y) в координатах изображения.
-        positive: True (правый клик) -> label=1
-                  False (левый клик) -> label=0
-        """
+    # ---------- Prompts ----------
+
+    def add_point(self, xy, positive: bool):
         if self.image_np is None:
-            return  # нет картинки - нечего делать
+            return
 
         if positive:
             self.pos_points.append(xy)
         else:
             self.neg_points.append(xy)
 
-        # после каждого нового поинта пересчитать сегментацию
         self.run_segmentation()
-        # обновить отрисовку
-        self.canvas.update_overlay(
-            self.current_mask, self.pos_points, self.neg_points
-        )
+        self.canvas.update_overlay(self.current_mask, self.pos_points, self.neg_points, self.box)
+
+    def set_box(self, box_xyxy):
+        if self.image_np is None:
+            return
+
+        self.box = box_xyxy
+        self.run_segmentation()
+        self.canvas.update_overlay(self.current_mask, self.pos_points, self.neg_points, self.box)
+
+    # ---------- Segmentation ----------
 
     def run_segmentation(self):
-        """
-        Прогоняем MobileSAM по текущим точкам и получаем маску.
-        Используем тот же API, что у оригинального SAM:
-        predictor.predict(point_coords=..., point_labels=..., multimask_output=True)
-        Возвращает несколько масок и скор; берём лучшую по score. :contentReference[oaicite:10]{index=10}
-        """
         if not self.image_is_set:
-            # защита: изображение не было подано в predictor.set_image
             if self.image_np is not None:
                 self.predictor.set_image(self.image_np)
                 self.image_is_set = True
             else:
                 return
 
-        # Если нет ни одной точки - просто убираем маску.
-        pts_all = self.pos_points + self.neg_points
-        if len(pts_all) == 0:
+        has_points = (len(self.pos_points) + len(self.neg_points)) > 0
+        has_box = self.box is not None
+
+        if not has_points and not has_box:
             self.current_mask = None
             return
 
-        # Готовим входы
-        # SAM ожидает np.array([[x,y], ...], dtype=np.float32),
-        # labels: 1 для положительных, 0 для отрицательных.
-        point_coords = np.array(
-            pts_all,
-            dtype=np.float32,
-        )
-        point_labels = np.array(
-            [1] * len(self.pos_points) + [0] * len(self.neg_points),
-            dtype=np.int32,
-        )
+        point_coords = None
+        point_labels = None
+        if has_points:
+            pts_all = self.pos_points + self.neg_points
+            point_coords = np.array(pts_all, dtype=np.float32)
+            point_labels = np.array(
+                [1] * len(self.pos_points) + [0] * len(self.neg_points),
+                dtype=np.int32,
+            )
+
+        box_np = None
+        if has_box:
+            box_np = np.array(self.box, dtype=np.float32)  # XYXY
 
         with torch.no_grad():
-            # multimask_output=True -> SAM/MobileSAM вернёт до 3 вариантов масок
-            # + их score; мы выберем маску с максимальным score
-            masks, scores, logits = self.predictor.predict(
+            masks, scores, _ = self.predictor.predict(
                 point_coords=point_coords,
                 point_labels=point_labels,
+                box=box_np,
                 multimask_output=True,
             )
 
-        # masks: [N, H, W] bool/uint8
-        # scores: [N] float
-        best_idx = np.argmax(scores)
+        best_idx = int(np.argmax(scores))
         best_mask = masks[best_idx]
-
-        # гарантируем uint8 {0,1}
         if best_mask.dtype != np.uint8:
             best_mask = best_mask.astype(np.uint8)
 
@@ -360,17 +447,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 def load_predictor(checkpoint_path: str):
-    """
-    Загружаем MobileSAM в память, как описано в README:
-        model_type = "vit_t"
-        sam_checkpoint = "./weights/mobile_sam.pt"
-        mobile_sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-        mobile_sam.to(device)
-        mobile_sam.eval()
-        predictor = SamPredictor(mobile_sam)
-    :contentReference[oaicite:11]{index=11}
-    """
-    model_type = "vit_t"  # MobileSAM = tiny ViT encoder ("vit_t") в офиц. репо. :contentReference[oaicite:12]{index=12}
+    model_type = "vit_t"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     mobile_sam = sam_model_registry[model_type](checkpoint=checkpoint_path)
@@ -387,7 +464,7 @@ def main():
         "--checkpoint",
         type=str,
         required=True,
-        help="Путь к весам MobileSAM (mobile_sam.pt)",
+        help="Путь к весам MobileSAM (mobile_sam.pt / .pth)",
     )
     args = parser.parse_args()
 
