@@ -5,8 +5,8 @@
 Minimal interactive SAM UI (MobileSAM version)
 
 Фичи:
-  - правая кнопка мыши = ПОЛОЖИТЕЛЬНАЯ точка (зелёная)
-  - левая кнопка мыши  = ОТРИЦАТЕЛЬНАЯ точка (красная)
+  - левая кнопка мыши = ПОЛОЖИТЕЛЬНАЯ точка (зелёная)
+  - правая кнопка мыши  = ОТРИЦАТЕЛЬНАЯ точка (красная)
   - Load Image: загрузить изображение
   - Clean Points: очистить точки и маску
   - Save Mask: сохранить текущую маску в PNG (0/255)
@@ -34,10 +34,6 @@ import matplotlib
 matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
-# MobileSAM imports (интерфейс тот же, что у оригинального Segment Anything)
-# см. README в MobileSAM: sam_model_registry, SamPredictor, model_type="vit_t",
-# checkpoint="./weights/mobile_sam.pt" :contentReference[oaicite:9]{index=9}
 from mobile_sam import sam_model_registry, SamPredictor
 
 
@@ -73,8 +69,8 @@ class ImageCanvas(FigureCanvas):
         Mouse click handler.
         event.button: 1=левый, 3=правый (на большинстве систем)
         Мы интерпретируем:
-          правый -> положительная точка (label=1)
-          левый  -> отрицательная точка (label=0)
+          левый -> положительная точка (label=1)
+          правый  -> отрицательная точка (label=0)
         """
         if event.inaxes != self.ax:
             return
@@ -84,12 +80,9 @@ class ImageCanvas(FigureCanvas):
         x = float(event.xdata)
         y = float(event.ydata)
 
-        # right click -> positive (green), left -> negative (red)
-        if event.button == 3:
-            # положительная
+        if event.button == 1:
             self.controller.add_point((x, y), positive=True)
-        elif event.button == 1:
-            # отрицательная
+        elif event.button == 3:
             self.controller.add_point((x, y), positive=False)
 
     def set_image(self, img_np):
