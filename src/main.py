@@ -16,25 +16,11 @@ Minimal interactive SAM UI (MobileSAM version) + points + boxes одноврем
 import sys
 import os
 import argparse
-import torch
 from PyQt5 import QtWidgets
 import matplotlib
 matplotlib.use("Qt5Agg")
-from mobile_sam import sam_model_registry, SamPredictor
-from src.main_window import MainWindow
-
-
-def load_predictor(checkpoint_path: str):
-    model_type = "vit_t"
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    mobile_sam = sam_model_registry[model_type](checkpoint=checkpoint_path)
-    mobile_sam.to(device=device)
-    mobile_sam.eval()
-
-    predictor = SamPredictor(mobile_sam)
-    return predictor, device
-
+from main_window import MainWindow
+from predictor import Predictor
 
 def main():
     parser = argparse.ArgumentParser()
@@ -50,10 +36,10 @@ def main():
         print(f"[ERR] checkpoint not found: {args.checkpoint}")
         sys.exit(1)
 
-    predictor, device = load_predictor(args.checkpoint)
+    predictor = Predictor(args.checkpoint)
 
     app = QtWidgets.QApplication(sys.argv)
-    win = MainWindow(predictor, device)
+    win = MainWindow(predictor)
     win.show()
     sys.exit(app.exec_())
 
