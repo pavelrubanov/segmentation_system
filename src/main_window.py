@@ -7,7 +7,6 @@ matplotlib.use("Qt5Agg")
 
 from image_canvas import ImageCanvas
 
-
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, predictor):
         super().__init__()
