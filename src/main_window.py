@@ -3,6 +3,9 @@ from PIL import Image
 
 from PyQt5 import QtWidgets
 import matplotlib
+
+from masks_buffer import MasksBuffer
+
 matplotlib.use("Qt5Agg")
 
 from image_canvas import ImageCanvas
@@ -18,6 +21,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.load_btn = QtWidgets.QPushButton("Load Image")
         self.clean_btn = QtWidgets.QPushButton("Clean")
         self.save_btn = QtWidgets.QPushButton("Save Mask")
+        self.save_btn = QtWidgets.QPushButton("Save Mask")
 
         self.info_label = QtWidgets.QLabel(
             "ЛКМ клик = положительная точка (зелёная)\n"
@@ -30,6 +34,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.load_btn.clicked.connect(self.on_load_image)
         self.clean_btn.clicked.connect(self.on_clean)
         self.save_btn.clicked.connect(self.on_save_mask)
+
+        self.masks_buffer = MasksBuffer()
 
         # layout справа (кнопки)
         side_layout = QtWidgets.QVBoxLayout()
@@ -46,6 +52,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # общий layout
         main_widget = QtWidgets.QWidget()
         main_layout = QtWidgets.QHBoxLayout(main_widget)
+        main_layout.addWidget(self.masks_buffer, stretch=0)
         main_layout.addWidget(self.canvas, stretch=1)
         main_layout.addWidget(side_widget, stretch=0)
 
@@ -77,14 +84,4 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return
 
-        save_name, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self,
-            "Сохранить маску как...",
-            "mask.png",
-            "PNG (*.png);;All Files (*)",
-        )
-        if not save_name:
-            return
-
-        mask_img = (self.canvas.current_mask * 255).astype(np.uint8)
-        Image.fromarray(mask_img).save(save_name)
+        self.masks_buffer.add(self.canvas.current_mask)
