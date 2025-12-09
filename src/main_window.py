@@ -50,7 +50,7 @@ class MainWindow(QtWidgets.QMainWindow):
         main_layout.addWidget(side_widget, stretch=0)
 
         self.setCentralWidget(main_widget)
-        self.resize(1200, 800)
+        self.showMaximized()
 
     # ---------- Логика ----------
 
@@ -69,7 +69,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.redraw()
 
     def on_save_mask(self):
-        if self.current_mask is None:
+        if self.canvas.current_mask is None:
             QtWidgets.QMessageBox.warning(
                 self,
                 "Нет маски",
@@ -86,5 +86,5 @@ class MainWindow(QtWidgets.QMainWindow):
         if not save_name:
             return
 
-        mask_img = (self.current_mask * 255).astype(np.uint8)
+        mask_img = (self.canvas.current_mask * 255).astype(np.uint8)
         Image.fromarray(mask_img).save(save_name)
