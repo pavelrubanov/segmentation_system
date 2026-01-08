@@ -7,5 +7,10 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Архитектура
-https://excalidraw.com/#json=1w20Eu6IEn7EwXzYKHROz,cBqSwp1XNumsVe4CFz9C6g
+Демонстрация сегментации
+![Демонстрация сегментации](https://github.com/pavelrubanov/segmentation_system/blob/main/Segmetation-demo.gif)
+
+
+
+Общая схема приложения
+![Архитектура](https://github.com/pavelrubanov/segmentation_system/blob/main/System%20arhictecture.png)
