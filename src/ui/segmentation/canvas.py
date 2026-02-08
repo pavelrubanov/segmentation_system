@@ -136,16 +136,23 @@ class SegmentationCanvas(FigureCanvas):
         self.current_mask = self.predictor.predict(self.pos_points, self.neg_points, self.box) if self.image_is_set else None
 
         self.axes.clear()
-        #self.axes.set_axis_off()
 
         if self.image_np is not None:
-            self.axes.imshow(self.image_np)
+            h, w = self.image_np.shape[:2]
+            # Отображаем изображение в исходном масштабе (1 пиксель = 1 единица)
+            self.axes.imshow(self.image_np, extent=[0, w, h, 0], aspect='equal')
+            self.axes.set_xlim(0, w)
+            self.axes.set_ylim(h, 0)
 
         if self.current_mask is not None:
+            h, w = self.current_mask.shape[:2]
+            # Отображаем маску в том же масштабе, что и изображение
             self.axes.imshow(
                 np.ma.masked_where(self.current_mask == 0, self.current_mask),
+                extent=[0, w, h, 0],
                 alpha=0.5,
-                cmap="jet"
+                cmap="jet",
+                aspect='equal'
             )
 
         # финальный box

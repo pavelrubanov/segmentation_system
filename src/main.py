@@ -20,7 +20,7 @@ from core.predictor import Predictor
 from PyQt6 import QtWidgets
 import matplotlib
 matplotlib.use("QtAgg")
-from ui.segmentation.window import Window as SegmentationWindow
+from ui.navigation_window import NavigationWindow
 
 def main():
     parser = argparse.ArgumentParser()
@@ -39,7 +39,7 @@ def main():
     predictor = Predictor(args.checkpoint)
 
     app = QtWidgets.QApplication(sys.argv)
-    win = SegmentationWindow(predictor)
+    win = NavigationWindow(predictor)
     win.show()
     sys.exit(app.exec())
 
