@@ -9,7 +9,7 @@ from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
 import matplotlib.patches as mpatches
 
-class ImageCanvas(FigureCanvas):
+class SegmentationCanvas(FigureCanvas):
     """
     Matplotlib canvas внутри PyQt6.
     Показывает картинку, точки, box и текущую маску.

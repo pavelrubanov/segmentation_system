@@ -8,7 +8,7 @@ from masks_buffer import MasksBuffer
 
 matplotlib.use("QtAgg")
 
-from image_canvas import ImageCanvas
+from segmentation_canvas import SegmentationCanvas
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, predictor):
@@ -16,7 +16,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("Segmentation System")
 
         # UI
-        self.canvas = ImageCanvas(predictor)
+        self.canvas = SegmentationCanvas(predictor)
 
         self.load_btn = QtWidgets.QPushButton("Load Image")
         self.clean_btn = QtWidgets.QPushButton("Clean")

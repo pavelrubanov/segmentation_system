@@ -20,7 +20,7 @@ from predictor import Predictor
 from PyQt6 import QtWidgets
 import matplotlib
 matplotlib.use("QtAgg")
-from main_window import MainWindow
+from segmentation_window import MainWindow
 
 def main():
     parser = argparse.ArgumentParser()
