@@ -1,4 +1,4 @@
-from predictor import Predictor
+from core.predictor import Predictor
 import numpy as np
 from PyQt6 import QtCore
 import matplotlib

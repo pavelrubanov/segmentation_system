@@ -16,11 +16,11 @@ Minimal interactive SAM UI (MobileSAM version) + points + boxes одноврем
 import sys
 import os
 import argparse
-from predictor import Predictor
+from core.predictor import Predictor
 from PyQt6 import QtWidgets
 import matplotlib
 matplotlib.use("QtAgg")
-from segmentation_window import MainWindow
+from ui.segmentation.window import Window as SegmentationWindow
 
 def main():
     parser = argparse.ArgumentParser()
@@ -39,7 +39,7 @@ def main():
     predictor = Predictor(args.checkpoint)
 
     app = QtWidgets.QApplication(sys.argv)
-    win = MainWindow(predictor)
+    win = SegmentationWindow(predictor)
     win.show()
     sys.exit(app.exec())
 

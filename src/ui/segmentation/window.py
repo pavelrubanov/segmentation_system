@@ -3,14 +3,13 @@ from PIL import Image
 
 from PyQt6 import QtWidgets
 import matplotlib
-
-from masks_buffer import MasksBuffer
-
 matplotlib.use("QtAgg")
 
-from segmentation_canvas import SegmentationCanvas
+from .masks_buffer import MasksBuffer
+from .canvas import SegmentationCanvas
 
-class MainWindow(QtWidgets.QMainWindow):
+
+class Window(QtWidgets.QMainWindow):
     def __init__(self, predictor):
         super().__init__()
         self.setWindowTitle("Segmentation System")
