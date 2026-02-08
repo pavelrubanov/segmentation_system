@@ -7,6 +7,12 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+Запуск
+```
+cd src
+python main.py
+```
+
 Демонстрация сегментации
 ![Демонстрация сегментации](https://github.com/pavelrubanov/segmentation_system/blob/main/Segmetation-demo.gif)
 

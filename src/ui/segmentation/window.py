@@ -56,7 +56,7 @@ class Window(QtWidgets.QMainWindow):
         main_layout.addWidget(side_widget, stretch=0)
 
         self.setCentralWidget(main_widget)
-        self.showMaximized()
+        self.resize(1920, 1080)
 
     def on_load_image(self):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(
