@@ -16,11 +16,11 @@ Minimal interactive SAM UI (MobileSAM version) + points + boxes одноврем
 import sys
 import os
 import argparse
-from PyQt5 import QtWidgets
-import matplotlib
-matplotlib.use("Qt5Agg")
-from main_window import MainWindow
 from predictor import Predictor
+from PyQt6 import QtWidgets
+import matplotlib
+matplotlib.use("QtAgg")
+from main_window import MainWindow
 
 def main():
     parser = argparse.ArgumentParser()
@@ -41,7 +41,7 @@ def main():
     app = QtWidgets.QApplication(sys.argv)
     win = MainWindow(predictor)
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

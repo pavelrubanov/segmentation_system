@@ -1,8 +1,10 @@
-torch
-torchvision
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.10.0
+torchvision==0.25.0
+
 git+https://github.com/ChaoningZhang/MobileSAM.git
-PyQt5
-matplotlib
-Pillow
-numpy
-timm
+PyQt6==6.10.2
+matplotlib==3.10.8
+Pillow==12.1.0
+numpy==2.2.6
+timm==1.0.24

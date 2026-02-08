@@ -1,5 +1,5 @@
 import numpy as np
-from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt6 import QtWidgets, QtCore, QtGui
 
 class MasksBuffer(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -8,20 +8,20 @@ class MasksBuffer(QtWidgets.QWidget):
         self.masks = []  # здесь храним маски целиком (np.ndarray)
 
         title = QtWidgets.QLabel("Masks\nbuffer")
-        title.setAlignment(QtCore.Qt.AlignCenter)
+        title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
         self.list = QtWidgets.QListWidget()
-        self.list.setViewMode(QtWidgets.QListView.IconMode)
+        self.list.setViewMode(QtWidgets.QListView.ViewMode.IconMode)
         self.list.setIconSize(QtCore.QSize(256, 256))
-        self.list.setResizeMode(QtWidgets.QListView.Adjust)
-        self.list.setMovement(QtWidgets.QListView.Static)
-        self.list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.list.setResizeMode(QtWidgets.QListView.ResizeMode.Adjust)
+        self.list.setMovement(QtWidgets.QListView.Movement.Static)
+        self.list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
 
-        self.list.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.list.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._menu)
 
-        delete_action = QtWidgets.QAction(self)
-        delete_action.setShortcut(QtGui.QKeySequence.Delete)
+        delete_action = QtGui.QAction(self)
+        delete_action.setShortcut(QtGui.QKeySequence(QtGui.QKeySequence.StandardKey.Delete))
         delete_action.triggered.connect(self.delete_selected)
         self.list.addAction(delete_action)
 
@@ -50,20 +50,27 @@ class MasksBuffer(QtWidgets.QWidget):
             return
         menu = QtWidgets.QMenu(self)
         act = menu.addAction("Delete")
-        if menu.exec_(self.list.mapToGlobal(pos)) == act:
+        if menu.exec(self.list.mapToGlobal(pos)) == act:
             self.delete_selected()
 
     @staticmethod
-    def _mask_to_icon(mask, size = 256):
+    def _mask_to_icon(mask, size=256):
         m = mask
         if m.dtype != np.uint8:
             m = (m.astype(np.float32) * 255).clip(0, 255).astype(np.uint8)
 
         h, w = m.shape
         m = np.ascontiguousarray(m)
-        qimg = QtGui.QImage(m.data, w, h, w, QtGui.QImage.Format_Grayscale8).copy()
+
+        fmt = QtGui.QImage.Format.Format_Grayscale8
+        qimg = QtGui.QImage(m.tobytes(), w, h, w, fmt)
+
         pm = QtGui.QPixmap.fromImage(qimg).scaled(
-            size, size, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
+            size,
+            size,
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation
         )
         return QtGui.QIcon(pm)
+
 

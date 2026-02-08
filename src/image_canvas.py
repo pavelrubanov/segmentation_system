@@ -1,17 +1,17 @@
+from predictor import Predictor
 import numpy as np
-from PyQt5 import QtCore
+from PyQt6 import QtCore
 import matplotlib
 
-matplotlib.use("Qt5Agg")
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
 import matplotlib.patches as mpatches
-from predictor import Predictor
 
 class ImageCanvas(FigureCanvas):
     """
-    Matplotlib canvas внутри PyQt5.
+    Matplotlib canvas внутри PyQt6.
     Показывает картинку, точки, box и текущую маску.
     - ЛКМ drag: RectangleSelector -> box
     - ЛКМ/ПКМ click: точки (через press+release, чтобы не ставить точку при drag)
@@ -33,7 +33,7 @@ class ImageCanvas(FigureCanvas):
         #self.axes.set_axis_off()
         super().__init__(fig)
 
-        self.setContextMenuPolicy(QtCore.Qt.PreventContextMenu)
+        self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.PreventContextMenu)
 
         # состояние для click-vs-drag
         self._press = None  # (x_px, y_px, button)

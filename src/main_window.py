@@ -1,12 +1,12 @@
 import numpy as np
 from PIL import Image
 
-from PyQt5 import QtWidgets
+from PyQt6 import QtWidgets
 import matplotlib
 
 from masks_buffer import MasksBuffer
 
-matplotlib.use("Qt5Agg")
+matplotlib.use("QtAgg")
 
 from image_canvas import ImageCanvas
 
@@ -58,8 +58,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.setCentralWidget(main_widget)
         self.showMaximized()
-
-    # ---------- Логика ----------
 
     def on_load_image(self):
         fname, _ = QtWidgets.QFileDialog.getOpenFileName(
