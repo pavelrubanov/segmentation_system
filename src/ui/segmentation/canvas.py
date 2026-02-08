@@ -25,7 +25,7 @@ class SegmentationCanvas(FigureCanvas):
         self.pos_points = []
         self.neg_points = []
         self.box = None                 # (x0,y0,x1,y1) или None
-        self.current_mask = None        # np.uint8 [H,W] 0/1
+        self.current_mask = None        # np.uint8 [H,W] 0/255
         self.image_is_set = False
 
         fig = Figure()

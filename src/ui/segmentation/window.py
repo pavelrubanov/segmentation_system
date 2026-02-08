@@ -27,8 +27,7 @@ class Window(QtWidgets.QMainWindow):
 
         # Поле для имени изображения
         self.image_name_label = QtWidgets.QLabel("Image name:")
-        self.image_name_input = QtWidgets.QLineEdit()
-        self.image_name_input.setPlaceholderText("Введите имя изображения")
+        self.image_name = QtWidgets.QLabel()
 
         # Кнопки
         self.load_images_btn = QtWidgets.QPushButton("Load Images")
@@ -56,7 +55,7 @@ class Window(QtWidgets.QMainWindow):
         # Layout справа (кнопки)
         side_layout = QtWidgets.QVBoxLayout()
         side_layout.addWidget(self.image_name_label)
-        side_layout.addWidget(self.image_name_input)
+        side_layout.addWidget(self.image_name)
         side_layout.addSpacing(10)
         side_layout.addWidget(self.load_images_btn)
         side_layout.addWidget(self.clean_btn)
@@ -100,48 +99,13 @@ class Window(QtWidgets.QMainWindow):
             self.current_image_idx = 0
             self._load_current_image()
 
-    def _load_current_image(self):
-        """Загружает текущее изображение на canvas"""
-        if not self.images_data:
-            return
-
-        img_data = self.images_data[self.current_image_idx]
-        self.canvas.set_image(img_data.image)
-        self.image_name_input.setText(img_data.name)
-
-        # Загружаем маски в буфер
-        self.masks_buffer.masks = [mask.copy() for mask in img_data.masks]
-        self.masks_buffer.list.clear()
-        for mask in img_data.masks:
-            item = QtWidgets.QListWidgetItem()
-            item.setIcon(self.masks_buffer._mask_to_icon(mask))
-            self.masks_buffer.list.addItem(item)
-
-        self._update_navigation_info()
-
-    def _update_navigation_info(self):
-        """Обновляет информацию о навигации и состояние кнопок"""
-        total = len(self.images_data)
-        current = self.current_image_idx + 1 if self.images_data else 0
-        self.next_image_btn.setText(f"Next image ({current}/{total})")
-        
-        # Управление доступностью кнопок
-        if not self.images_data:
-            self.prev_image_btn.setEnabled(False)
-            self.next_image_btn.setEnabled(False)
-        else:
-            # Кнопка "Назад" неактивна на первом изображении
-            self.prev_image_btn.setEnabled(self.current_image_idx > 0)
-            # Кнопка "Далее" неактивна на последнем изображении
-            self.next_image_btn.setEnabled(self.current_image_idx < total - 1)
-
     def on_clean(self):
         """Очищает canvas"""
         self.canvas.clean()
         self.canvas.redraw()
 
     def on_save_to_buffer(self):
-        """Сохраняет текущую маску в буфер"""
+        """Сохраняет текущую маску в буфер (и на диск)"""
         if self.canvas.current_mask is None:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -150,17 +114,13 @@ class Window(QtWidgets.QMainWindow):
             )
             return
 
-        # Копируем маску, чтобы сохранить исходный размер
-        mask_copy = np.array(self.canvas.current_mask, copy=True)
-        self.masks_buffer.add(mask_copy)
+        self.masks_buffer.add(self.canvas.current_mask)
         self.on_clean()
 
     def on_previous_image(self):
         """Переходит к предыдущему изображению"""
         if not self.images_data or self.current_image_idx == 0:
             return
-
-        self._save_current_masks()
 
         self.current_image_idx -= 1
         self._load_current_image()
@@ -174,22 +134,12 @@ class Window(QtWidgets.QMainWindow):
         if self.current_image_idx >= total - 1:
             return
 
-        self._save_current_masks()
-
         self.current_image_idx += 1
         self._load_current_image()
 
-    def _save_current_masks(self):
-        """Сохраняет текущие маски из буфера в данные изображения"""
-        if not self.images_data:
-            return
-
-        img_data = self.images_data[self.current_image_idx]
-        img_data.masks = [mask.copy() for mask in self.masks_buffer.masks]
-        img_data.name = self.image_name_input.text() or img_data.name
 
     def on_save_and_leave(self):
-        """Сохраняет все изображения и маски, затем закрывает окно"""
+        """Сохраняет все изображения (маски уже на диске), затем закрывает окно"""
         if not self.images_data:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -198,18 +148,14 @@ class Window(QtWidgets.QMainWindow):
             )
             return
 
-        self._save_current_masks()
-
-        OUTPUT_DIR = "output"  # TODO: сделать выбор директории в найстройках
+        OUTPUT_DIR = "output"  # TODO: сделать выбор директории в настройках
 
         try:
             output_path = Path(OUTPUT_DIR)
             output_path.mkdir(parents=True, exist_ok=True)
 
             images_dir = output_path / "images"
-            masks_dir = output_path / "masks"
             images_dir.mkdir(exist_ok=True)
-            masks_dir.mkdir(exist_ok=True)
 
             for idx, img_data in enumerate(self.images_data):
                 # Генерируем имя файла
@@ -223,21 +169,12 @@ class Window(QtWidgets.QMainWindow):
                 img_pil = Image.fromarray(img_data.image)
                 img_pil.save(img_path)
 
-                # Сохраняем маски (без изменения масштаба)
-                for mask_idx, mask in enumerate(img_data.masks):
-                    mask_path = masks_dir / f"{base_name}_mask_{mask_idx:04d}.png"
-                    # Конвертируем маску в uint8 [0, 255]
-                    if mask.dtype != np.uint8:
-                        mask_uint8 = (mask.astype(np.float32) * 255).clip(0, 255).astype(np.uint8)
-                    else:
-                        mask_uint8 = mask.copy()
-                    mask_pil = Image.fromarray(mask_uint8, mode="L")
-                    mask_pil.save(mask_path)
-
+            # Маски уже сохранены на диск в output/masks/ при работе с ними
             QtWidgets.QMessageBox.information(
                 self,
                 "Успех",
-                f"Все изображения и маски сохранены в директорию output/",
+                f"Все изображения сохранены в {images_dir}/\n"
+                f"Маски сохранены в {output_path / 'masks'}/",
             )
             self.close()
         except Exception as e:
@@ -246,3 +183,32 @@ class Window(QtWidgets.QMainWindow):
                 "Ошибка",
                 f"Ошибка при сохранении: {str(e)}",
             )
+
+    def _load_current_image(self):
+        """Загружает текущее изображение на canvas"""
+        if not self.images_data:
+            return
+
+        img_data = self.images_data[self.current_image_idx]
+        self.canvas.set_image(img_data.image)
+
+        # Загружаем маски с диска для этого изображения
+        self.masks_buffer.set_image_name(img_data.name)
+
+        self._update_navigation_info()
+
+    def _update_navigation_info(self):
+        """Обновляет информацию о навигации и состояние кнопок"""
+        total = len(self.images_data)
+        current = self.current_image_idx + 1 if self.images_data else 0
+        self.next_image_btn.setText(f"Next image ({current}/{total})")
+
+        # Управление доступностью кнопок
+        if not self.images_data:
+            self.prev_image_btn.setEnabled(False)
+            self.next_image_btn.setEnabled(False)
+        else:
+            # Кнопка "Назад" неактивна на первом изображении
+            self.prev_image_btn.setEnabled(self.current_image_idx > 0)
+            # Кнопка "Далее" неактивна на последнем изображении
+            self.next_image_btn.setEnabled(self.current_image_idx < total - 1)

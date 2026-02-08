@@ -46,4 +46,4 @@ class Predictor:
         best_idx = int(np.argmax(scores))
         best_mask = masks[best_idx]
 
-        return best_mask
+        return (best_mask * 255).astype(np.uint8)  # uint8 [H,W] 0/255
