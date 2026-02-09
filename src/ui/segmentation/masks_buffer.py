@@ -9,9 +9,7 @@ class MasksBuffer(QtWidgets.QWidget):
         super().__init__(parent)
         
         self.output_dir = Path(output_dir)
-        self.masks_dir = self.output_dir / "masks"
-        self.masks_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Храним пути к файлам масок, а не сами массивы
         self.mask_paths: list[Path] = []
         self.current_image_name = ""  # имя текущего изображения для поиска масок
@@ -58,7 +56,7 @@ class MasksBuffer(QtWidgets.QWidget):
         
         # Проверяем существующие файлы на диске
         pattern = f"{base_name}_mask_*.png"
-        for mask_path in self.masks_dir.glob(pattern):
+        for mask_path in self.output_dir.glob(pattern):
             idx_str = mask_path.stem.split("_mask_")[-1]
             if idx_str.isnumeric():
                 next_idx = max(int(idx_str), next_idx)
@@ -66,7 +64,7 @@ class MasksBuffer(QtWidgets.QWidget):
         next_idx += 1
 
         # Сохраняем маску на диск
-        mask_path = self.masks_dir / f"{base_name}_mask_{next_idx:04d}.png"
+        mask_path = self.output_dir / f"{base_name}_mask_{next_idx:04d}.png"
         mask_pil = Image.fromarray(mask, mode="L")
         mask_pil.save(mask_path)
 
@@ -114,7 +112,7 @@ class MasksBuffer(QtWidgets.QWidget):
 
         # Ищем все маски для этого изображения
         pattern = f"{base_name}_mask_*.png"
-        mask_files = sorted(self.masks_dir.glob(pattern))
+        mask_files = sorted(self.output_dir.glob(pattern))
 
         for mask_path in mask_files:
             self.mask_paths.append(mask_path)

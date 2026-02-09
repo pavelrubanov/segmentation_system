@@ -154,9 +154,6 @@ class Window(QtWidgets.QMainWindow):
             output_path = Path(OUTPUT_DIR)
             output_path.mkdir(parents=True, exist_ok=True)
 
-            images_dir = output_path / "images"
-            images_dir.mkdir(exist_ok=True)
-
             for idx, img_data in enumerate(self.images_data):
                 # Генерируем имя файла
                 if img_data.name:
@@ -165,7 +162,7 @@ class Window(QtWidgets.QMainWindow):
                     base_name = f"image_{idx:04d}"
 
                 # Сохраняем изображение (без изменения масштаба)
-                img_path = images_dir / f"{base_name}.png"
+                img_path = output_path / f"{base_name}.png"
                 img_pil = Image.fromarray(img_data.image)
                 img_pil.save(img_path)
 
@@ -173,8 +170,7 @@ class Window(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.information(
                 self,
                 "Успех",
-                f"Все изображения сохранены в {images_dir}/\n"
-                f"Маски сохранены в {output_path / 'masks'}/",
+                f"Все изображения и маски сохранены в {output_path}/\n"
             )
             self.close()
         except Exception as e:
