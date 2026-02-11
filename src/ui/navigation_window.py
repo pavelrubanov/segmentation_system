@@ -13,18 +13,15 @@ class NavigationWindow(QtWidgets.QMainWindow):
 
         # Кнопки
         self.process_images_btn = QtWidgets.QPushButton("Process images")
-        self.masks_btn = QtWidgets.QPushButton("Masks")
         self.leave_btn = QtWidgets.QPushButton("Leave")
 
         # Привязка сигналов
         self.process_images_btn.clicked.connect(self.on_process_images)
-        self.masks_btn.clicked.connect(self.on_masks)
         self.leave_btn.clicked.connect(self.close)
 
         # Layout
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.process_images_btn)
-        layout.addWidget(self.masks_btn)
         layout.addStretch()
         layout.addWidget(self.leave_btn)
 
@@ -40,11 +37,4 @@ class NavigationWindow(QtWidgets.QMainWindow):
             self.segmentation_window = SegmentationWindow(self.predictor, self)
             self.segmentation_window.show()
 
-    def on_masks(self):
-        """Открывает окно управления масками (пока заглушка)"""
-        QtWidgets.QMessageBox.information(
-            self,
-            "Masks",
-            "Функция управления масками будет реализована позже"
-        )
 

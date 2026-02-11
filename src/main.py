@@ -18,8 +18,6 @@ import os
 import argparse
 from core.predictor import Predictor
 from PyQt6 import QtWidgets
-import matplotlib
-matplotlib.use("QtAgg")
 from ui.navigation_window import NavigationWindow
 
 def main():
