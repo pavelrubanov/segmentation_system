@@ -6,7 +6,7 @@ from PyQt6 import QtWidgets
 
 from core.image_data import ImageWithMasks
 from .masks_buffer import MasksBuffer
-from .qt_canvas import SegmentationCanvas
+from .canvas import SegmentationCanvas
 
 
 class Window(QtWidgets.QMainWindow):
