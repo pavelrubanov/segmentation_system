@@ -1,11 +1,9 @@
 """
-Канвас сегментации на QGraphicsView.
+QGraphicsView-канвас для интерактивной сегментации.
 
-Режим prompts:  ЛКМ клик — positive точка, ПКМ клик — negative точка,
-                ЛКМ drag — box.
-Режим edit:     ЛКМ — кисть/ластик.
-Ctrl + ЛКМ drag — перемещение (встроенный Qt ScrollHandDrag, в любом режиме).
-Зум колёсиком (не меньше fit-to-view).
+Prompts:  ЛКМ клик = +точка, ПКМ клик = −точка, ЛКМ drag = box.
+Edit:     ЛКМ = кисть/ластик.
+Ctrl+ЛКМ = pan (Qt ScrollHandDrag).  Колёсико = зум в точку курсора.
 """
 
 import numpy as np
@@ -14,145 +12,166 @@ from typing import Optional
 from PyQt6 import QtCore, QtGui, QtWidgets
 from core.predictor import Predictor
 
-_MASK_COLOR_BGRA = (255, 255, 0, 128)
-_NO_BRUSH = QtGui.QBrush(QtCore.Qt.BrushStyle.NoBrush)
-_LMB = QtCore.Qt.MouseButton.LeftButton
-_RMB = QtCore.Qt.MouseButton.RightButton
+# ── Константы ─────────────────────────────────────────────────────────────────
+
+_LMB  = QtCore.Qt.MouseButton.LeftButton
+_RMB  = QtCore.Qt.MouseButton.RightButton
 _CTRL = QtCore.Qt.KeyboardModifier.ControlModifier
-_SCROLL_HAND = QtWidgets.QGraphicsView.DragMode.ScrollHandDrag
-_NO_DRAG = QtWidgets.QGraphicsView.DragMode.NoDrag
+_HAND = QtWidgets.QGraphicsView.DragMode.ScrollHandDrag
+_NONE = QtWidgets.QGraphicsView.DragMode.NoDrag
+
+# PyQt6: BrushStyle/PenStyle нельзя передавать напрямую в setBrush/setPen — нужна обёртка
+_NO_BRUSH = QtGui.QBrush(QtCore.Qt.BrushStyle.NoBrush)
+_NO_PEN   = QtGui.QPen(QtCore.Qt.PenStyle.NoPen)
+
+_MASK_COLOR = QtGui.QColor(0, 255, 255, 128)   # cyan semi-transparent
+_CLICK_THR  = 5                                  # px, порог клик vs drag
 
 
-# ─── Overlay маски ────────────────────────────────────────────────────────────
+# ── Overlay маски ─────────────────────────────────────────────────────────────
 
-class _MaskOverlay(QtWidgets.QGraphicsItem):
-    """Рисует ARGB-изображение маски поверх фото."""
+class _Overlay(QtWidgets.QGraphicsItem):
+    """ARGB QImage поверх фото.  QPainter рисует кисть, numpy заполняет/читает."""
 
     def __init__(self, w: int, h: int):
         super().__init__()
         self._w, self._h = w, h
-        self.image = self._make_image(w, h)
+        self.qimg = self._blank(w, h)
 
     def boundingRect(self):
         return QtCore.QRectF(0, 0, self._w, self._h)
 
-    def paint(self, painter, _option, _widget=None):
-        painter.drawImage(0, 0, self.image)
+    def paint(self, painter, *_):
+        painter.drawImage(0, 0, self.qimg)
 
-    def resize(self, w: int, h: int):
+    def resize(self, w, h):
         self.prepareGeometryChange()
         self._w, self._h = w, h
-        self.image = self._make_image(w, h)
+        self.qimg = self._blank(w, h)
         self.update()
 
+    def clear(self):
+        self.qimg.fill(QtCore.Qt.GlobalColor.transparent)
+        self.update()
+
+    # numpy ↔ QImage  (Format_ARGB32 → в памяти BGRA на little-endian)
+
+    def fill_from_mask(self, mask: np.ndarray):
+        """Заполнить overlay из бинарной маски (H,W) uint8 0/255."""
+        arr = self._numpy()
+        on = (mask > 0).astype(np.uint8)
+        arr[..., 0] = on * _MASK_COLOR.blue()
+        arr[..., 1] = on * _MASK_COLOR.green()
+        arr[..., 2] = on * _MASK_COLOR.red()
+        arr[..., 3] = on * _MASK_COLOR.alpha()
+        self.update()
+
+    def extract_mask(self) -> np.ndarray:
+        """Извлечь маску из альфа-канала → (H,W) uint8 0/255."""
+        return (self._numpy()[..., 3] > 0).astype(np.uint8) * 255
+
+    def _numpy(self):
+        ptr = self.qimg.bits()
+        ptr.setsize(self.qimg.sizeInBytes())
+        return np.frombuffer(ptr, np.uint8).reshape(self._h, self._w, 4)
+
     @staticmethod
-    def _make_image(w, h):
-        img = QtGui.QImage(w, h, QtGui.QImage.Format.Format_ARGB32_Premultiplied)
+    def _blank(w, h):
+        img = QtGui.QImage(w, h, QtGui.QImage.Format.Format_ARGB32)
         img.fill(QtCore.Qt.GlobalColor.transparent)
         return img
 
-    def numpy_view(self):
-        ptr = self.image.bits()
-        ptr.setsize(self.image.sizeInBytes())
-        return np.frombuffer(ptr, np.uint8).reshape(self._h, self._w, 4)
 
+# ── Canvas ────────────────────────────────────────────────────────────────────
 
-# ─── Основной канвас ─────────────────────────────────────────────────────────
-
-class QtSegmentationCanvas(QtWidgets.QGraphicsView):
+class SegmentationCanvas(QtWidgets.QGraphicsView):
 
     def __init__(self, predictor: Predictor, parent=None):
         super().__init__(parent)
         self.predictor = predictor
 
-        self._scene = QtWidgets.QGraphicsScene(self)
-        self.setScene(self._scene)
-
+        self._sc = QtWidgets.QGraphicsScene(self)
+        self.setScene(self._sc)
         self.setRenderHints(QtGui.QPainter.RenderHint.Antialiasing |
                             QtGui.QPainter.RenderHint.SmoothPixmapTransform)
-        self.setTransformationAnchor(QtWidgets.QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setResizeAnchor(QtWidgets.QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setDragMode(_NO_DRAG)
+        self.setTransformationAnchor(
+            QtWidgets.QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setResizeAnchor(
+            QtWidgets.QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setDragMode(_NONE)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.setMouseTracking(True)
 
-        # Данные
+        # Публичное состояние (читает window.py)
         self.image_np: Optional[np.ndarray] = None
-        self.pos_points: list = []
-        self.neg_points: list = []
+        self.pos_points: list[tuple] = []
+        self.neg_points: list[tuple] = []
         self.box: Optional[tuple] = None
         self.current_mask: Optional[np.ndarray] = None
         self.edit_mode = False
 
-        # Edit-mode
+        # Кисть
         self._tool = "draw"
-        self._brush_radius = 15
+        self._brush_r = 15
         self._painting = False
-        self._last_xy: Optional[tuple] = None
-        self._mask_data: Optional[np.ndarray] = None
-        self._disk_cache: dict[int, np.ndarray] = {}
+        self._last_pt: Optional[tuple] = None
 
-        # Графические элементы
-        self._img_item: Optional[QtWidgets.QGraphicsPixmapItem] = None
-        self._overlay: Optional[_MaskOverlay] = None
+        # Элементы сцены (создаются лениво в set_image)
+        self._pixmap: Optional[QtWidgets.QGraphicsPixmapItem] = None
+        self._overlay: Optional[_Overlay] = None
         self._box_item: Optional[QtWidgets.QGraphicsRectItem] = None
         self._drag_rect: Optional[QtWidgets.QGraphicsRectItem] = None
-        self._brush_circle: Optional[QtWidgets.QGraphicsEllipseItem] = None
-        self._point_items: list = []
+        self._brush_cursor: Optional[QtWidgets.QGraphicsEllipseItem] = None
+        self._pt_items: list = []
 
-        # Состояние мыши
-        self._press_pos: Optional[QtCore.QPoint] = None
-        self._press_scene: Optional[QtCore.QPointF] = None
-        self._dragging = False   # ЛКМ drag → box
-        self._panning = False    # Qt ScrollHandDrag активен
+        # Мышь
+        self._press_vp: Optional[QtCore.QPoint] = None
+        self._press_sc: Optional[QtCore.QPointF] = None
+        self._dragging = False
+        self._panning = False
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def set_tool(self, tool: str):
-        if tool in ("draw", "erase"):
-            self._tool = tool
+    def set_tool(self, t: str):
+        if t in ("draw", "erase"):
+            self._tool = t
 
     def set_brush_radius(self, r: int):
-        self._brush_radius = max(1, min(200, int(r)))
-        if self._brush_circle and not self._brush_circle.rect().isNull():
-            c = self._brush_circle.rect().center()
-            br = self._brush_radius
-            self._brush_circle.setRect(c.x() - br, c.y() - br, br * 2, br * 2)
+        self._brush_r = max(1, min(200, r))
 
-    def set_image(self, image_np: np.ndarray):
+    def set_image(self, img: np.ndarray):
         self.clean()
-        self.image_np = image_np
-        self.predictor.set_image(image_np)
-        h, w = image_np.shape[:2]
+        self.image_np = img
+        self.predictor.set_image(img)
+        h, w = img.shape[:2]
 
-        qimg = QtGui.QImage(image_np.data, w, h, 3 * w, QtGui.QImage.Format.Format_RGB888).copy()
-        pm = QtGui.QPixmap.fromImage(qimg)
-        if self._img_item is None:
-            self._img_item = self._scene.addPixmap(pm)
-            self._img_item.setZValue(0)
+        qimg = QtGui.QImage(img.data, w, h, 3 * w,
+                            QtGui.QImage.Format.Format_RGB888).copy()
+        if self._pixmap is None:
+            self._pixmap = self._sc.addPixmap(QtGui.QPixmap.fromImage(qimg))
         else:
-            self._img_item.setPixmap(pm)
+            self._pixmap.setPixmap(QtGui.QPixmap.fromImage(qimg))
 
         if self._overlay is None:
-            self._overlay = _MaskOverlay(w, h)
-            self._overlay.setZValue(10)
-            self._scene.addItem(self._overlay)
+            self._overlay = _Overlay(w, h)
+            self._overlay.setZValue(1)
+            self._sc.addItem(self._overlay)
         else:
             self._overlay.resize(w, h)
 
-        if self._brush_circle is None:
-            pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 200))
-            pen.setWidthF(1.5)
-            self._brush_circle = QtWidgets.QGraphicsEllipseItem()
-            self._brush_circle.setPen(pen)
-            self._brush_circle.setBrush(_NO_BRUSH)
-            self._brush_circle.setZValue(50)
-            self._brush_circle.setVisible(False)
-            self._scene.addItem(self._brush_circle)
+        if self._brush_cursor is None:
+            self._brush_cursor = QtWidgets.QGraphicsEllipseItem()
+            self._brush_cursor.setPen(
+                QtGui.QPen(QtGui.QColor(255, 255, 255, 180), 1.5))
+            self._brush_cursor.setBrush(_NO_BRUSH)
+            self._brush_cursor.setZValue(100)
+            self._brush_cursor.setVisible(False)
+            self._sc.addItem(self._brush_cursor)
 
-        self._scene.setSceneRect(0, 0, w, h)
+        self._sc.setSceneRect(0, 0, w, h)
         self.resetTransform()
-        self.fitInView(self._scene.sceneRect(), QtCore.Qt.AspectRatioMode.KeepAspectRatio)
+        self.fitInView(self._sc.sceneRect(),
+                       QtCore.Qt.AspectRatioMode.KeepAspectRatio)
 
     def clean(self):
         self.pos_points.clear()
@@ -160,292 +179,243 @@ class QtSegmentationCanvas(QtWidgets.QGraphicsView):
         self.box = None
         self.current_mask = None
         self.edit_mode = False
-        self._painting = False
-        self._panning = False
-        self._dragging = False
-        self._last_xy = None
-        self._mask_data = None
+        self._painting = self._dragging = self._panning = False
+        self._last_pt = None
 
-        for item in self._point_items:
-            if item.scene() is self._scene:
-                self._scene.removeItem(item)
-        self._point_items.clear()
+        for it in self._pt_items:
+            if it.scene() is self._sc:
+                self._sc.removeItem(it)
+        self._pt_items.clear()
 
-        for item in (self._box_item, self._drag_rect):
-            if item is not None and item.scene() is self._scene:
-                self._scene.removeItem(item)
+        for it in (self._box_item, self._drag_rect):
+            if it and it.scene() is self._sc:
+                self._sc.removeItem(it)
         self._box_item = self._drag_rect = None
 
         if self._overlay:
-            self._overlay.image.fill(QtCore.Qt.GlobalColor.transparent)
-            self._overlay.update()
-        if self._brush_circle:
-            self._brush_circle.setVisible(False)
+            self._overlay.clear()
+        if self._brush_cursor:
+            self._brush_cursor.setVisible(False)
 
     def redraw(self):
         if not self.edit_mode:
-            self._run_predictor()
+            self._predict()
 
-    def start_edit_from_current_mask(self) -> bool:
-        if self.current_mask is None or self.image_np is None:
+    def start_edit(self) -> bool:
+        if self.current_mask is None or self._overlay is None:
             return False
         self.edit_mode = True
-        self._mask_data = (self.current_mask > 0).astype(np.uint8) * 255
-        self._sync_overlay()
-        if self._brush_circle:
-            self._brush_circle.setVisible(True)
+        self._overlay.fill_from_mask(self.current_mask)
+        if self._brush_cursor:
+            self._brush_cursor.setVisible(True)
         return True
 
     def finish_edit(self) -> Optional[np.ndarray]:
-        if not self.edit_mode or self._mask_data is None:
+        if not self.edit_mode or self._overlay is None:
             return None
-        return (self._mask_data > 0).astype(np.uint8) * 255
+        return self._overlay.extract_mask()
 
-    # ── Фокус и клавиатура ───────────────────────────────────────────────────
+    # ── Клавиатура: Ctrl → pan ────────────────────────────────────────────────
 
     def enterEvent(self, e):
-        self.setFocus()
-        super().enterEvent(e)
+        self.setFocus()          # чтобы key events приходили сразу, без клика
 
     def keyPressEvent(self, e):
         if e.key() == QtCore.Qt.Key.Key_Control and not self._painting:
-            self.setDragMode(_SCROLL_HAND)
+            self.setDragMode(_HAND)
         super().keyPressEvent(e)
 
     def keyReleaseEvent(self, e):
         if e.key() == QtCore.Qt.Key.Key_Control and not self._panning:
-            self.setDragMode(_NO_DRAG)
+            self.setDragMode(_NONE)
         super().keyReleaseEvent(e)
 
-    # ── События мыши ──────────────────────────────────────────────────────────
+    # ── Мышь ──────────────────────────────────────────────────────────────────
 
     def wheelEvent(self, e):
         if self.image_np is None:
             return
         dy = e.angleDelta().y()
-        if dy == 0:
+        if dy == 0 or (dy < 0 and self._is_fit()):
             return
-        if dy < 0 and self._fits_fully():
-            return
-        factor = 1.25 if dy > 0 else 0.8
-        self.scale(factor, factor)
+        f = 1.25 if dy > 0 else 0.8
+        self.scale(f, f)
 
     def mousePressEvent(self, e):
         if self.image_np is None:
             return
-
-        # Ctrl + ЛКМ → pan (Qt ScrollHandDrag делает всё сам)
-        if self.dragMode() == _SCROLL_HAND and e.button() == _LMB:
+        # Ctrl + ЛКМ → pan (Qt делает всё сам)
+        if self.dragMode() == _HAND and e.button() == _LMB:
             self._panning = True
             super().mousePressEvent(e)
             return
 
-        self._press_pos = e.position().toPoint()
-        self._press_scene = self.mapToScene(self._press_pos)
+        self._press_vp = e.position().toPoint()
+        self._press_sc = self.mapToScene(self._press_vp)
 
         if self.edit_mode:
             if e.button() == _LMB:
                 self._painting = True
-                self._last_xy = (self._press_scene.x(), self._press_scene.y())
-                self._paint_at(self._press_scene.x(), self._press_scene.y())
+                self._last_pt = (self._press_sc.x(), self._press_sc.y())
+                self._brush_stroke(self._press_sc.x(), self._press_sc.y())
             return
 
-        # Prompts mode: ЛКМ → потенциальный box
+        # Prompts: ЛКМ → потенциальный box
         if e.button() == _LMB:
             self._dragging = True
-            self._ensure_drag_rect(self._press_scene)
+            pen = QtGui.QPen(QtGui.QColor(255, 255, 0), 2)
+            self._drag_rect = self._sc.addRect(
+                QtCore.QRectF(self._press_sc, self._press_sc), pen, _NO_BRUSH)
+            self._drag_rect.setZValue(5)
 
     def mouseMoveEvent(self, e):
         if self.image_np is None:
             return
-
         if not self._panning:
             pt = self.mapToScene(e.position().toPoint())
             if self.edit_mode:
-                self._move_brush(pt)
+                self._show_brush(pt)
                 if self._painting:
-                    self._paint_at(pt.x(), pt.y())
-            elif self._dragging and self._drag_rect and self._press_scene:
-                self._drag_rect.setRect(QtCore.QRectF(self._press_scene, pt).normalized())
-
-        # Всегда вызываем super: обрабатывает pan + обновляет позицию мыши для AnchorUnderMouse
+                    self._brush_stroke(pt.x(), pt.y())
+            elif self._dragging and self._drag_rect and self._press_sc:
+                self._drag_rect.setRect(
+                    QtCore.QRectF(self._press_sc, pt).normalized())
+        # Обязательно: ① pan ② внутренний трекинг мыши для AnchorUnderMouse
         super().mouseMoveEvent(e)
 
     def mouseReleaseEvent(self, e):
         if self.image_np is None:
             return
-
+        # Конец pan
         if self._panning:
             self._panning = False
             super().mouseReleaseEvent(e)
             if not (e.modifiers() & _CTRL):
-                self.setDragMode(_NO_DRAG)
+                self.setDragMode(_NONE)
             return
 
-        pos = e.position().toPoint()
-        click = self._press_pos is not None and \
-                (pos - self._press_pos).manhattanLength() < 5
+        vp = e.position().toPoint()
+        click = (self._press_vp is not None
+                 and (vp - self._press_vp).manhattanLength() < _CLICK_THR)
 
         if self.edit_mode:
             self._painting = False
-            self._last_xy = None
+            self._last_pt = None
             return
 
         if e.button() == _LMB:
-            if click and self._press_scene:
-                self.pos_points.append((self._press_scene.x(), self._press_scene.y()))
-                self._draw_point(self._press_scene, positive=True)
-                self._run_predictor()
-            elif self._dragging and self._press_scene:
-                self._commit_box(self._press_scene, self.mapToScene(pos))
-                self._run_predictor()
+            if click and self._press_sc:
+                self._add_point(self._press_sc, positive=True)
+            elif self._dragging and self._press_sc:
+                self._set_box(self._press_sc, self.mapToScene(vp))
             self._dragging = False
-            self._remove_drag_rect()
+            self._safe_remove(self._drag_rect)
+            self._drag_rect = None
 
-        elif e.button() == _RMB and click and self._press_scene and not (e.modifiers() & _CTRL):
-            self.neg_points.append((self._press_scene.x(), self._press_scene.y()))
-            self._draw_point(self._press_scene, positive=False)
-            self._run_predictor()
+        elif (e.button() == _RMB and click
+              and self._press_sc and not (e.modifiers() & _CTRL)):
+            self._add_point(self._press_sc, positive=False)
 
-    # ── Точки и бокс ──────────────────────────────────────────────────────────
+    # ── Точки / Box ───────────────────────────────────────────────────────────
 
-    def _draw_point(self, p: QtCore.QPointF, positive: bool):
+    def _add_point(self, p, positive: bool):
+        (self.pos_points if positive else self.neg_points).append(
+            (p.x(), p.y()))
+
         r = 4
-        if positive:
-            pen = QtGui.QPen(QtCore.Qt.GlobalColor.black)
-            brush = QtGui.QBrush(QtGui.QColor(0, 255, 0))
-        else:
-            pen = QtGui.QPen(QtGui.QColor(255, 0, 0))
-            brush = _NO_BRUSH
-        pen.setWidthF(1.5)
-        dot = self._scene.addEllipse(p.x() - r, p.y() - r, 2 * r, 2 * r, pen, brush)
-        dot.setZValue(30)
-        self._point_items.append(dot)
+        color = QtGui.QColor(0, 255, 0) if positive else QtGui.QColor(255, 0, 0)
+        pen = QtGui.QPen(
+            QtCore.Qt.GlobalColor.black if positive else color, 1.5)
+        brush = QtGui.QBrush(color) if positive else _NO_BRUSH
+        dot = self._sc.addEllipse(
+            p.x() - r, p.y() - r, 2 * r, 2 * r, pen, brush)
+        dot.setZValue(10)
+        self._pt_items.append(dot)
 
-        if not positive:
-            pen2 = QtGui.QPen(QtGui.QColor(255, 0, 0))
-            pen2.setWidthF(2)
+        if not positive:                    # крестик ×
+            xpen = QtGui.QPen(color, 2)
             for dx, dy in ((1, 1), (1, -1)):
-                line = self._scene.addLine(p.x() - 5 * dx, p.y() - 5 * dy,
-                                           p.x() + 5 * dx, p.y() + 5 * dy, pen2)
-                line.setZValue(31)
-                self._point_items.append(line)
+                ln = self._sc.addLine(
+                    p.x() - 5*dx, p.y() - 5*dy,
+                    p.x() + 5*dx, p.y() + 5*dy, xpen)
+                ln.setZValue(11)
+                self._pt_items.append(ln)
 
-    def _ensure_drag_rect(self, p: QtCore.QPointF):
-        pen = QtGui.QPen(QtGui.QColor(255, 255, 0))
-        pen.setWidthF(2)
-        if self._drag_rect is None:
-            self._drag_rect = self._scene.addRect(QtCore.QRectF(p, p), pen, _NO_BRUSH)
-            self._drag_rect.setZValue(25)
-        else:
-            self._drag_rect.setRect(QtCore.QRectF(p, p))
+        self._predict()
 
-    def _commit_box(self, p0: QtCore.QPointF, p1: QtCore.QPointF):
+    def _set_box(self, p0, p1):
         rect = QtCore.QRectF(p0, p1).normalized()
         if rect.width() < 3 or rect.height() < 3:
             return
         self.box = (rect.left(), rect.top(), rect.right(), rect.bottom())
-        pen = QtGui.QPen(QtGui.QColor(255, 255, 0))
-        pen.setWidthF(2)
+        pen = QtGui.QPen(QtGui.QColor(255, 255, 0), 2)
         if self._box_item is None:
-            self._box_item = self._scene.addRect(rect, pen, _NO_BRUSH)
-            self._box_item.setZValue(24)
+            self._box_item = self._sc.addRect(rect, pen, _NO_BRUSH)
+            self._box_item.setZValue(4)
         else:
             self._box_item.setRect(rect)
+        self._predict()
 
-    def _remove_drag_rect(self):
-        if self._drag_rect and self._drag_rect.scene() is self._scene:
-            self._scene.removeItem(self._drag_rect)
-        self._drag_rect = None
+    # ── Предиктор ─────────────────────────────────────────────────────────────
 
-    # ── Предиктор и overlay ───────────────────────────────────────────────────
-
-    def _run_predictor(self):
+    def _predict(self):
         if self.image_np is None or self.edit_mode:
             return
-        mask = self.predictor.predict(self.pos_points, self.neg_points, self.box)
+        mask = self.predictor.predict(
+            self.pos_points, self.neg_points, self.box)
         self.current_mask = mask
-        if mask is None or self._overlay is None:
-            if self._overlay:
-                self._overlay.image.fill(QtCore.Qt.GlobalColor.transparent)
-                self._overlay.update()
-            return
-        self._mask_data = (mask > 0).astype(np.uint8) * 255
-        self._sync_overlay()
+        if mask is not None and self._overlay:
+            self._overlay.fill_from_mask(mask)
+        elif self._overlay:
+            self._overlay.clear()
 
-    def _sync_overlay(self, dirty: Optional[QtCore.QRect] = None):
-        if self._overlay is None or self._mask_data is None:
+    # ── Кисть (QPainter вместо numpy-штампов) ─────────────────────────────────
+
+    def _brush_stroke(self, x: float, y: float):
+        if self._overlay is None:
             return
-        arr = self._overlay.numpy_view()
-        b, g, r, a = _MASK_COLOR_BGRA
-        if dirty is None:
-            arr[..., 0] = b
-            arr[..., 1] = g
-            arr[..., 2] = r
-            arr[..., 3] = np.where(self._mask_data > 0, a, 0).astype(np.uint8)
-            self._overlay.update()
+        p = QtGui.QPainter(self._overlay.qimg)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, False)
+        p.setPen(_NO_PEN)
+        p.setBrush(_MASK_COLOR)
+        if self._tool == "draw":
+            p.setCompositionMode(
+                QtGui.QPainter.CompositionMode.CompositionMode_Source)
         else:
-            y0, y1 = max(0, dirty.top()), min(arr.shape[0], dirty.bottom() + 1)
-            x0, x1 = max(0, dirty.left()), min(arr.shape[1], dirty.right() + 1)
-            sub = arr[y0:y1, x0:x1]
-            sub[..., 0] = b
-            sub[..., 1] = g
-            sub[..., 2] = r
-            sub[..., 3] = np.where(self._mask_data[y0:y1, x0:x1] > 0, a, 0).astype(np.uint8)
-            self._overlay.update(QtCore.QRectF(dirty))
+            p.setCompositionMode(
+                QtGui.QPainter.CompositionMode.CompositionMode_Clear)
 
-    # ── Кисть / ластик ────────────────────────────────────────────────────────
+        # Интерполяция, чтобы линия была без разрывов
+        lx, ly = self._last_pt or (x, y)
+        dist = ((x - lx)**2 + (y - ly)**2) ** 0.5
+        n = max(1, int(dist / max(1, self._brush_r // 2)))
+        r = float(self._brush_r)
+        for i in range(n + 1):
+            t = i / n
+            p.drawEllipse(
+                QtCore.QPointF(lx + (x - lx) * t, ly + (y - ly) * t), r, r)
+        p.end()
 
-    def _paint_at(self, x: float, y: float):
-        if self._mask_data is None:
-            return
-        lx, ly = self._last_xy or (x, y)
-        dist = ((x - lx) ** 2 + (y - ly) ** 2) ** 0.5
-        n = max(1, int(dist / max(1, self._brush_radius / 2)))
-        xs, ys = np.linspace(lx, x, n + 1), np.linspace(ly, y, n + 1)
-        dirty = None
-        for xi, yi in zip(xs, ys):
-            d = self._stamp(int(round(xi)), int(round(yi)))
-            if d:
-                dirty = d if dirty is None else dirty.united(d)
-        self._last_xy = (x, y)
-        self.current_mask = self._mask_data
-        if dirty:
-            self._sync_overlay(dirty)
+        self._last_pt = (x, y)
+        self._overlay.update()
 
-    def _stamp(self, cx: int, cy: int) -> Optional[QtCore.QRect]:
-        h, w = self._mask_data.shape
-        r = self._brush_radius
-        x0, x1 = max(cx - r, 0), min(cx + r + 1, w)
-        y0, y1 = max(cy - r, 0), min(cy + r + 1, h)
-        if x1 <= x0 or y1 <= y0:
-            return None
-        disk = self._get_disk(r)
-        kx0, ky0 = x0 - (cx - r), y0 - (cy - r)
-        k = disk[ky0:ky0 + (y1 - y0), kx0:kx0 + (x1 - x0)]
-        if not k.any():
-            return None
-        self._mask_data[y0:y1, x0:x1][k] = 255 if self._tool == "draw" else 0
-        return QtCore.QRect(x0, y0, x1 - x0, y1 - y0)
-
-    def _get_disk(self, r: int) -> np.ndarray:
-        if r not in self._disk_cache:
-            yy, xx = np.ogrid[-r:r + 1, -r:r + 1]
-            self._disk_cache[r] = (xx * xx + yy * yy) <= r * r
-        return self._disk_cache[r]
-
-    def _move_brush(self, p: QtCore.QPointF):
-        if not self._brush_circle:
-            return
-        r = self._brush_radius
-        self._brush_circle.setVisible(True)
-        self._brush_circle.setRect(p.x() - r, p.y() - r, r * 2, r * 2)
+    def _show_brush(self, pt):
+        if self._brush_cursor:
+            r = self._brush_r
+            self._brush_cursor.setVisible(True)
+            self._brush_cursor.setRect(pt.x() - r, pt.y() - r, 2*r, 2*r)
 
     # ── Утилиты ───────────────────────────────────────────────────────────────
 
-    def _fits_fully(self) -> bool:
+    def _safe_remove(self, item):
+        """removeItem с проверкой — PyQt6 падает если item не в этой сцене."""
+        if item and item.scene() is self._sc:
+            self._sc.removeItem(item)
+
+    def _is_fit(self) -> bool:
+        """True если изображение целиком видно (нельзя zoom out дальше)."""
         if self.image_np is None:
             return True
-        view_rect = self.mapToScene(self.viewport().rect()).boundingRect()
+        vr = self.mapToScene(self.viewport().rect()).boundingRect()
         h, w = self.image_np.shape[:2]
-        return view_rect.contains(QtCore.QRectF(0, 0, w, h))
+        return vr.contains(QtCore.QRectF(0, 0, w, h))
