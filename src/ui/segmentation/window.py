@@ -100,7 +100,7 @@ class Window(QtWidgets.QMainWindow):
     def on_load_images(self):
         fnames, _ = QtWidgets.QFileDialog.getOpenFileNames(
             self, "Выбери изображения", "",
-            "Images (*.png *.jpg *.jpeg *.bmp)")
+            "Images (*.png *.jpg *.jpeg *.bmp *.tif)")
         if not fnames:
             return
         self.images_data = [
