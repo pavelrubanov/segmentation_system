@@ -143,7 +143,7 @@ def _measure_width_on_section(
 
 def measure_leaf_pca(
     mask: np.ndarray,
-    fractions: Iterable[float] = (0.25, 0.5, 0.75),
+    fractions: Iterable[float] = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875),
     mm_per_px: Optional[float] = None,
     image: Optional[np.ndarray] = None,
     show: bool = True,
@@ -241,76 +241,66 @@ def measure_leaf_pca(
     return out
 
 
-def _visualize_measurement(
-    image: Optional[np.ndarray],
-    bin_u8: np.ndarray,
-    result: Dict[str, Any],
-    mm_per_px: Optional[float],
-) -> None:
+def _draw_measurement(ax, bin_u8, result, mm_per_px, image=None):
+    """Общая отрисовка результатов измерения на axes."""
     contour = result["contour"]
     polygon = result["polygon"]
     pca = result["pca"]
 
-    fig, ax = plt.subplots(figsize=(8, 8))
-
     if image is None:
         ax.imshow(bin_u8, cmap="gray")
     else:
-        if image.ndim == 2:
-            ax.imshow(image, cmap="gray")
-        else:
-            ax.imshow(image)
-
-        # light overlay of mask for readability
+        ax.imshow(image if image.ndim == 3 else image, cmap=None if image.ndim == 3 else "gray")
         ax.imshow(bin_u8, cmap="gray", alpha=0.25)
 
-    # contour & polygon
-    ax.plot(contour[:, 0], contour[:, 1], linewidth=2, label="contour")
+    ax.plot(contour[:, 0], contour[:, 1], linewidth=1, label="contour")
     if polygon.shape[0] >= 2:
         poly_closed = np.vstack([polygon, polygon[0]])
-        ax.plot(poly_closed[:, 0], poly_closed[:, 1], linewidth=2, label="polygon")
+        ax.plot(poly_closed[:, 0], poly_closed[:, 1], linewidth=1, label="polygon")
 
-    # PCA length axis
     x0, y0 = pca["axis_length_p0"]
     x1, y1 = pca["axis_length_p1"]
-    ax.plot([x0, x1], [y0, y1], linewidth=3, label="PCA length axis")
+    ax.plot([x0, x1], [y0, y1], linewidth=1, label="PCA length axis")
 
-    # Optional: PCA width axis (through mean)
     wx0, wy0 = pca["axis_width_p0"]
     wx1, wy1 = pca["axis_width_p1"]
-    ax.plot([wx0, wx1], [wy0, wy1], linewidth=2, linestyle="--", label="PCA width axis")
+    ax.plot([wx0, wx1], [wy0, wy1], linewidth=1, linestyle="--", label="PCA width axis")
 
-    # Section lines + labels
     for f, sec in result["widths_by_fraction"].items():
         if sec["p0"] is None or sec["p1"] is None:
             continue
-        (sx0, sy0) = sec["p0"]
-        (sx1, sy1) = sec["p1"]
-        ax.plot([sx0, sx1], [sy0, sy1], linewidth=3)
-
+        (sx0, sy0), (sx1, sy1) = sec["p0"], sec["p1"]
+        ax.plot([sx0, sx1], [sy0, sy1], linewidth=1)
         cx, cy = sec["center"]
         wpx = sec["width_px"]
-        if mm_per_px is not None:
-            wtxt = f"{wpx:.1f}px / {sec['width_mm']:.2f}mm"
-        else:
-            wtxt = f"{wpx:.1f}px"
-        ax.text(cx, cy, f"f={f:.2f}\n{wtxt}", fontsize=10, ha="center", va="bottom")
+        wtxt = f"{wpx:.1f}px / {sec['width_mm']:.2f}mm" if mm_per_px else f"{wpx:.1f}px"
+        ax.text(cx, cy, wtxt, fontsize=10, ha="center", va="bottom", color="red")
 
-    # Title with global measurements
-    Lpx = result["length_px"]
-    Wpx = result["width_px"]
-    if mm_per_px is not None:
+    Lpx, Wpx = result["length_px"], result["width_px"]
+    if mm_per_px:
         title = f"Length={Lpx:.1f}px ({result['length_mm']:.2f}mm) | Width={Wpx:.1f}px ({result['width_mm']:.2f}mm)"
     else:
         title = f"Length={Lpx:.1f}px | Width={Wpx:.1f}px"
 
     ax.set_title(title)
     ax.set_xlim(0, bin_u8.shape[1] - 1)
-    ax.set_ylim(bin_u8.shape[0] - 1, 0)  # y-down like image coords
+    ax.set_ylim(bin_u8.shape[0] - 1, 0)
     ax.set_aspect("equal")
     ax.legend(loc="upper right")
     ax.axis("off")
+
+
+def _visualize_measurement(image, bin_u8, result, mm_per_px):
+    fig, ax = plt.subplots(figsize=(8, 8))
+    _draw_measurement(ax, bin_u8, result, mm_per_px, image)
     plt.tight_layout()
     plt.show()
 
 
+def save_measurement_visualization(bin_u8, result, out_path, mm_per_px=None, image=None, dpi=150):
+    """Сохраняет визуализацию измерения в PNG-файл."""
+    fig, ax = plt.subplots(figsize=(8, 8))
+    _draw_measurement(ax, bin_u8, result, mm_per_px, image)
+    plt.tight_layout()
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
