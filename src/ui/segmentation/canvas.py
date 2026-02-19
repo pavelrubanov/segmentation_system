@@ -145,8 +145,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         self.predictor.set_image(img)
         h, w = img.shape[:2]
 
-        qimg = QtGui.QImage(img.data, w, h, 3 * w,
-                            QtGui.QImage.Format.Format_RGB888).copy()
+        qimg = QtGui.QImage(img.data, w, h, 3 * w, QtGui.QImage.Format.Format_RGB888).copy()
         if self._pixmap is None:
             self._pixmap = self._sc.addPixmap(QtGui.QPixmap.fromImage(qimg))
         else:
