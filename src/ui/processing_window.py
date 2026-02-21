@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from PyQt6 import QtWidgets, QtCore
 
-from core.processing_service import measure_leaf_pca, save_measurement_visualization
+from core.leaf_measure import measure_leaf, save_measurement_visualization
 
 
 def run_processing(parent: QtWidgets.QWidget):
@@ -42,24 +42,24 @@ def run_processing(parent: QtWidgets.QWidget):
         name = Path(fpath).stem
         try:
             mask = np.array(Image.open(fpath).convert("L"))
-            result = measure_leaf_pca(mask, fractions=fractions, show=False)
+            metrics = measure_leaf(mask, fractions=fractions)
 
             # Сохранение визуализации
             save_measurement_visualization(
-                bin_u8=mask,
-                result=result,
+                mask=mask,
+                metrics=metrics,
                 out_path=str(out_path / f"{name}_vis.png"),
             )
 
             # Собираем строку для CSV
             row = {
                 "image": name,
-                "length_px": f"{result['length_px']:.1f}",
-                "width_px": f"{result['width_px']:.1f}",
+                "length_px": f"{metrics.length_px:.1f}",
+                "width_px": f"{metrics.width_px:.1f}",
             }
             for f in fractions:
-                sec = result["widths_by_fraction"].get(f, {})
-                row[f"width_{f:.3f}"] = f"{sec.get('width_px', 0):.1f}"
+                sec = metrics.widths.get(f)
+                row[f"width_{f:.3f}"] = f"{sec.width_px:.1f}" if sec else "0.0"
             rows.append(row)
 
         except Exception as exc:
