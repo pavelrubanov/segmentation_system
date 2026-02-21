@@ -1,22 +1,11 @@
 # leaf_measure.py
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Dict, Iterable, Optional, Tuple, Any
 
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from PIL import Image
-
-
-def _as_binary_u8(mask: np.ndarray) -> np.ndarray:
-    if mask.ndim != 2:
-        raise ValueError("mask must be a 2D array")
-    m = (mask > 0).astype(np.uint8) * 255
-    if m.sum() == 0:
-        raise ValueError("mask is empty (no foreground pixels)")
-    return m
 
 
 def _largest_external_contour(bin_u8: np.ndarray) -> np.ndarray:
@@ -142,11 +131,9 @@ def _measure_width_on_section(
 
 
 def measure_leaf_pca(
-    mask: np.ndarray,
+    bin_u8: np.ndarray,
     fractions: Iterable[float] = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875),
     mm_per_px: Optional[float] = None,
-    image: Optional[np.ndarray] = None,
-    show: bool = True,
 ) -> Dict[str, Any]:
     """
     Prototype leaf measurement by binary mask.
@@ -164,8 +151,6 @@ def measure_leaf_pca(
       widths_by_fraction: {f: {width_px, width_mm, p0, p1, center}}
       plus PCA axes endpoints for debug/vis.
     """
-    bin_u8 = _as_binary_u8(mask)
-    h, w = bin_u8.shape[:2]
 
     contour = _largest_external_contour(bin_u8)
     polygon = _approx_polygon(contour, eps_frac=0.01)
@@ -235,9 +220,6 @@ def measure_leaf_pca(
         },
     }
 
-    if show:
-        _visualize_measurement(image=image, bin_u8=bin_u8, result=out, mm_per_px=mm_per_px)
-
     return out
 
 
@@ -288,13 +270,6 @@ def _draw_measurement(ax, bin_u8, result, mm_per_px, image=None):
     ax.set_aspect("equal")
     ax.legend(loc="upper right")
     ax.axis("off")
-
-
-def _visualize_measurement(image, bin_u8, result, mm_per_px):
-    fig, ax = plt.subplots(figsize=(8, 8))
-    _draw_measurement(ax, bin_u8, result, mm_per_px, image)
-    plt.tight_layout()
-    plt.show()
 
 
 def save_measurement_visualization(bin_u8, result, out_path, mm_per_px=None, image=None, dpi=150):

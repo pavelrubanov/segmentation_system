@@ -46,7 +46,7 @@ def run_processing(parent: QtWidgets.QWidget):
 
             # Сохранение визуализации
             save_measurement_visualization(
-                bin_u8=(mask > 0).astype(np.uint8) * 255,
+                bin_u8=mask,
                 result=result,
                 out_path=str(out_path / f"{name}_vis.png"),
             )

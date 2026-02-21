@@ -44,7 +44,3 @@ class NavigationWindow(QtWidgets.QMainWindow):
     def on_process_images(self):
         """Запускает обработку масок"""
         run_processing(self)
-
-
-
-
