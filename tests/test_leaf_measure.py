@@ -3,9 +3,7 @@ import numpy as np
 import pytest
 
 from core.leaf_measure import (
-    LeafMetrics,
     SectionWidth,
-    _measure_widths,
     _to_tuple,
     measure_leaf,
     save_measurement_visualization,
