@@ -1,0 +1,7 @@
+torch==2.10.0
+numpy
+matplotlib
+opencv-python-headless>=4
+Pillow
+pytest>=7
+pytest-cov
