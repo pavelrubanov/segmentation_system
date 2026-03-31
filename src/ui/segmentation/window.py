@@ -152,9 +152,6 @@ class Window(QtWidgets.QMainWindow):
             self._load_current_image()
 
     def on_save_and_leave(self):
-        if not self.images_data:
-            self._warn("Нет данных", "Нет изображений для сохранения.")
-            return
         try:
             out = Path("output")
             out.mkdir(parents=True, exist_ok=True)
