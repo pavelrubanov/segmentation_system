@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 .idea/
+src/output
 
 # C extensions
 *.so
