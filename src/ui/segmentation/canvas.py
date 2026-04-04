@@ -209,6 +209,16 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
             self._brush_cursor.setVisible(True)
         return True
 
+    def load_mask_for_edit(self, mask: np.ndarray):
+        """Загружает готовую маску и сразу входит в режим редактирования."""
+        if self._overlay is None:
+            return
+        self.current_mask = mask
+        self.edit_mode = True
+        self._overlay.fill_from_mask(mask)
+        if self._brush_cursor:
+            self._brush_cursor.setVisible(True)
+
     def finish_edit(self) -> Optional[np.ndarray]:
         if not self.edit_mode or self._overlay is None:
             return None

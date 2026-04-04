@@ -66,6 +66,7 @@ class Window(QtWidgets.QMainWindow):
         self.erase_radio.toggled.connect(self._on_tool_changed)
         self.brush_size.valueChanged.connect(
             lambda v: self.canvas.set_brush_radius(v))
+        self.masks_buffer.mask_edit_requested.connect(self._on_mask_edit_requested)
 
         # ── Layout ────────────────────────────────────────────────────────────
         side = QtWidgets.QVBoxLayout()
@@ -113,6 +114,7 @@ class Window(QtWidgets.QMainWindow):
         self._load_current_image()
 
     def on_clean(self):
+        """Очищает canvas, но НЕ сбрасывает editing_index — позволяет пересегментировать."""
         self.canvas.clean()
         self.canvas.redraw()
         self._update_edit_ui()
@@ -125,8 +127,10 @@ class Window(QtWidgets.QMainWindow):
             if mask is None:
                 self._warn("Нет маски", "Не найдена отредактированная маска.")
                 return
-            self.masks_buffer.add(mask)
-            self.on_clean()
+            self.masks_buffer.save_mask(mask)
+            self.canvas.clean()
+            self.canvas.redraw()
+            self._update_edit_ui()
             return
 
         # Шаг 1: фиксируем маску предиктора → включаем edit mode
@@ -195,14 +199,26 @@ class Window(QtWidgets.QMainWindow):
 
     def _update_edit_ui(self):
         editing = self.canvas.edit_mode
+        is_existing = self.masks_buffer.editing_index is not None
         self.edit_group.setEnabled(editing)
+
         if editing:
-            self.save_to_buffer_btn.setText("Фиксировать и сохранить в буфер")
+            btn_text = "Сохранить изменения" if is_existing else "Сохранить в буфер"
+            self.save_to_buffer_btn.setText(btn_text)
             self.info_label.setText(
                 "Режим ручного редактирования маски:\n"
                 "- ЛКМ: рисовать выбранным инструментом\n"
                 "- Ctrl + ЛКМ drag: перемещение\n"
-                "Нажми 'Фиксировать и сохранить в буфер'.")
+                f"Нажми '{btn_text}'.\n"
+                "Или 'Очистить' для пересегментации.")
+        elif is_existing:
+            self.save_to_buffer_btn.setText("Фиксировать маску")
+            self.info_label.setText(
+                f"Пересегментация маски #{self.masks_buffer.editing_index + 1}.\n"
+                "ЛКМ клик = положительная точка (зелёная)\n"
+                "ПКМ клик = отрицательная точка (красная)\n"
+                "ЛКМ drag = box (жёлтый прямоугольник)\n"
+                "Далее нажми 'Фиксировать маску'.")
         else:
             self.save_to_buffer_btn.setText("Фиксировать маску")
             self.info_label.setText(
@@ -211,6 +227,14 @@ class Window(QtWidgets.QMainWindow):
                 "ЛКМ drag = box (жёлтый прямоугольник)\n"
                 "Ctrl + ЛКМ drag = перемещение\n"
                 "Далее нажми 'Фиксировать маску'.")
+
+    def _on_mask_edit_requested(self, mask: np.ndarray):
+        """Двойной клик по маске в буфере → загрузить для редактирования."""
+        if self.canvas.image_np is None:
+            return
+        self.canvas.clean()
+        self.canvas.load_mask_for_edit(mask)
+        self._update_edit_ui()
 
     def _on_tool_changed(self):
         if self.draw_radio.isChecked():
