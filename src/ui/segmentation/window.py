@@ -1,8 +1,9 @@
+import shutil
 import numpy as np
-from PIL import Image
 from pathlib import Path
 
 from PyQt6 import QtWidgets
+from PIL import Image
 
 from core.image_data import ImageWithMasks
 from .masks_buffer import MasksBuffer
@@ -152,15 +153,23 @@ class Window(QtWidgets.QMainWindow):
             self._load_current_image()
 
     def on_save_and_leave(self):
+        mask_paths = self.masks_buffer.all_mask_paths()
+        if not mask_paths:
+            self._warn("Нет масок", "Нет сохранённых масок для экспорта.")
+            return
+
+        save_dir = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Выберите папку для сохранения масок")
+        if not save_dir:
+            return
+
         try:
-            out = Path("output")
-            out.mkdir(parents=True, exist_ok=True)
-            for idx, d in enumerate(self.images_data):
-                name = Path(d.name).stem if d.name else f"image_{idx:04d}"
-                Image.fromarray(d.image).save(out / f"{name}.png")
+            dest = Path(save_dir)
+            for p in mask_paths:
+                shutil.copy2(p, dest / p.name)
             QtWidgets.QMessageBox.information(
                 self, "Успех",
-                f"Все изображения и маски сохранены в {out}/")
+                f"Сохранено масок: {len(mask_paths)}\nПапка: {dest}")
             self.close()
         except Exception as exc:
             QtWidgets.QMessageBox.critical(

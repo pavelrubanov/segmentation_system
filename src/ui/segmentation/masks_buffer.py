@@ -1,3 +1,4 @@
+import tempfile
 import numpy as np
 from pathlib import Path
 from PIL import Image
@@ -5,10 +6,11 @@ from PyQt6 import QtWidgets, QtCore, QtGui
 
 
 class MasksBuffer(QtWidgets.QWidget):
-    def __init__(self, parent=None, output_dir: str = "output"):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        
-        self.output_dir = Path(output_dir)
+
+        self._temp_dir_obj = tempfile.TemporaryDirectory(prefix="segmasks_")
+        self.output_dir = Path(self._temp_dir_obj.name)
 
         # Храним пути к файлам масок, а не сами массивы
         self.mask_paths: list[Path] = []
@@ -37,6 +39,10 @@ class MasksBuffer(QtWidgets.QWidget):
         layout.addWidget(self.list)
 
         self.setMinimumWidth(160)
+
+    def all_mask_paths(self) -> list[Path]:
+        """Возвращает пути ко всем маскам всех изображений во временной папке."""
+        return sorted(self.output_dir.glob("*_mask_*.png"))
 
     def set_image_name(self, image_name: str):
         """Устанавливает имя изображения и загружает соответствующие маски с диска"""
