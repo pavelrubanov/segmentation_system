@@ -43,52 +43,55 @@ class TestMeasureLeafBasic:
         """Горизонтальный прямоугольник 100×20: длина=99, ширина=19."""
         mask = make_rect_mask(h=20, w=100)
         m = measure_leaf(mask)
-        assert abs(m.length_px - 99) < 0.5
-        assert abs(m.width_px - 19) < 0.5
+        assert abs(m.length - 99) < 0.5
+        assert abs(m.width - 19) < 0.5
 
     def test_length_ge_width(self):
         """Длина всегда ≥ ширины."""
         mask = make_rect_mask(h=30, w=150)
         m = measure_leaf(mask)
-        assert m.length_px >= m.width_px
+        assert m.length >= m.width
 
     def test_square_length_equals_width(self):
         """Для квадрата длина ≈ ширина (симметрия PCA)."""
         mask = make_rect_mask(h=100, w=100)
         m = measure_leaf(mask)
-        assert abs(m.length_px - m.width_px) < 1.0
+        assert abs(m.length - m.width) < 1.0
 
     def test_small_mask_does_not_raise(self):
         """Маленькая маска 5×15 не вызывает исключения."""
         mask = make_rect_mask(h=5, w=15)
         m = measure_leaf(mask)
-        assert m.length_px > 0
+        assert m.length > 0
 
-
-class TestMeasureLeafMm:
-
-    def test_no_mm_per_px_gives_none(self):
-        """Без mm_per_px поля _mm = None."""
+    def test_default_unit_is_px(self):
+        """По умолчанию единица — px, масштаб 1."""
         mask = make_rect_mask(h=20, w=100)
         m = measure_leaf(mask)
-        assert m.length_mm is None
-        assert m.width_mm is None
+        assert m.unit == "px"
 
-    def test_mm_conversion_length(self):
-        """length_mm = length_px × mm_per_px."""
-        mask = make_rect_mask(h=20, w=100)
-        scale = 0.1
-        m = measure_leaf(mask, mm_per_px=scale)
-        assert m.length_mm is not None
-        assert abs(m.length_mm - m.length_px * scale) < 1e-6
 
-    def test_mm_conversion_width(self):
-        """width_mm = width_px × mm_per_px."""
+class TestMeasureLeafScale:
+
+    def test_scale_multiplies_length(self):
+        """length = length_px × scale."""
         mask = make_rect_mask(h=20, w=100)
-        scale = 0.1
-        m = measure_leaf(mask, mm_per_px=scale)
-        assert m.width_mm is not None
-        assert abs(m.width_mm - m.width_px * scale) < 1e-6
+        m_px = measure_leaf(mask)
+        m_mm = measure_leaf(mask, unit="мм", scale=0.1)
+        assert abs(m_mm.length - m_px.length * 0.1) < 1e-6
+
+    def test_scale_multiplies_width(self):
+        """width = width_px × scale."""
+        mask = make_rect_mask(h=20, w=100)
+        m_px = measure_leaf(mask)
+        m_mm = measure_leaf(mask, unit="мм", scale=0.1)
+        assert abs(m_mm.width - m_px.width * 0.1) < 1e-6
+
+    def test_custom_unit_name(self):
+        """Название единицы передаётся в результат."""
+        mask = make_rect_mask(h=20, w=100)
+        m = measure_leaf(mask, unit="см", scale=0.01)
+        assert m.unit == "см"
 
 
 class TestMeasureLeafFractions:
@@ -128,7 +131,7 @@ class TestMeasureLeafSections:
         mask = make_rect_mask(h=40, w=200)
         m = measure_leaf(mask)
         for sec in m.widths.values():
-            assert sec.width_px > 0
+            assert sec.width > 0
 
     def test_section_width_le_total_width(self):
         """Ширина в сечении не превышает PCA-ширину более чем на 1 пиксель
@@ -136,7 +139,7 @@ class TestMeasureLeafSections:
         mask = make_rect_mask(h=40, w=200)
         m = measure_leaf(mask)
         for sec in m.widths.values():
-            assert sec.width_px <= m.width_px + 1.0
+            assert sec.width <= m.width + 1.0
 
     def test_section_p0_p1_not_none(self):
         """p0 и p1 не None для прямоугольника."""
@@ -146,29 +149,24 @@ class TestMeasureLeafSections:
             assert sec.p0 is not None
             assert sec.p1 is not None
 
-    def test_section_mm_with_scale(self):
-        """С mm_per_px = 0.05 ширины в сечениях тоже конвертируются."""
+    def test_section_width_with_scale(self):
+        """С масштабом 0.05 ширины в сечениях тоже конвертируются."""
         mask = make_rect_mask(h=40, w=200)
-        m = measure_leaf(mask, mm_per_px=0.05)
-        for sec in m.widths.values():
-            if sec.p0 is not None:
-                assert sec.width_mm is not None
-                assert abs(sec.width_mm - sec.width_px * 0.05) < 1e-5
-
-    def test_section_mm_none_without_scale(self):
-        """Без масштаба width_mm = None."""
-        mask = make_rect_mask(h=40, w=200)
-        m = measure_leaf(mask)
-        for sec in m.widths.values():
-            assert sec.width_mm is None
+        m_px = measure_leaf(mask)
+        m_mm = measure_leaf(mask, unit="мм", scale=0.05)
+        for frac in m_px.widths:
+            sec_px = m_px.widths[frac]
+            sec_mm = m_mm.widths[frac]
+            if sec_px.p0 is not None:
+                assert abs(sec_mm.width - sec_px.width * 0.05) < 1e-5
 
     def test_ellipse_midpoint_widest(self):
         """У эллипса ширина в середине (0.5) ≥ ширины у краёв."""
         mask = make_ellipse_mask(h=80, w=200)
         m = measure_leaf(mask)
-        mid = m.widths[0.5].width_px
-        lo = m.widths[0.125].width_px
-        hi = m.widths[0.875].width_px
+        mid = m.widths[0.5].width
+        lo = m.widths[0.125].width
+        hi = m.widths[0.875].width
         assert mid >= lo - 1.0
         assert mid >= hi - 1.0
 
@@ -273,21 +271,18 @@ class TestSectionWidth:
 
     def test_all_fields_set(self):
         sec = SectionWidth(
-            width_px=10.0,
-            width_mm=1.0,
+            width=10.0,
             p0=(0.0, 0.0),
             p1=(10.0, 0.0),
             center=(5.0, 5.0),
         )
-        assert sec.width_px == 10.0
-        assert sec.width_mm == 1.0
+        assert sec.width == 10.0
         assert sec.p0 == (0.0, 0.0)
         assert sec.p1 == (10.0, 0.0)
         assert sec.center == (5.0, 5.0)
 
     def test_optional_fields_none(self):
-        sec = SectionWidth(width_px=0.0, width_mm=None, p0=None, p1=None, center=(0.0, 0.0))
-        assert sec.width_mm is None
+        sec = SectionWidth(width=0.0, p0=None, p1=None, center=(0.0, 0.0))
         assert sec.p0 is None
         assert sec.p1 is None
 
@@ -313,10 +308,10 @@ class TestSaveVisualization:
         save_measurement_visualization(mask, m, str(out))
         assert out.stat().st_size > 0
 
-    def test_with_mm_scale(self, tmp_path):
+    def test_with_scale(self, tmp_path):
         """Визуализация с масштабом не вызывает исключений."""
         mask = make_rect_mask(h=40, w=100)
-        m = measure_leaf(mask, mm_per_px=0.05)
+        m = measure_leaf(mask, unit="мм", scale=0.05)
         out = tmp_path / "vis_mm.png"
         save_measurement_visualization(mask, m, str(out))
         assert out.exists()
