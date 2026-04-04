@@ -19,6 +19,7 @@ import argparse
 from core.predictor import Predictor
 from PyQt6 import QtWidgets
 from ui.navigation_window import NavigationWindow
+from ui.style import apply_theme
 
 def main():
     parser = argparse.ArgumentParser()
@@ -37,6 +38,7 @@ def main():
     predictor = Predictor(args.checkpoint)
 
     app = QtWidgets.QApplication(sys.argv)
+    apply_theme(app)
     win = NavigationWindow(predictor)
     win.show()
     sys.exit(app.exec())

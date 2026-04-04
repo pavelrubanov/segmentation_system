@@ -5,6 +5,13 @@ from PIL import Image
 from PyQt6 import QtWidgets, QtCore, QtGui
 
 
+_ICON_SIZE = 128
+_MASK_COLOR = QtGui.QColor(0, 255, 255, 160)  # cyan для иконок
+_CHECK_LIGHT = QtGui.QColor(220, 220, 220)
+_CHECK_DARK = QtGui.QColor(200, 200, 200)
+_CHECK_CELL = 8
+
+
 class MasksBuffer(QtWidgets.QWidget):
     mask_edit_requested = QtCore.pyqtSignal(np.ndarray)  # маска для редактирования
 
@@ -16,14 +23,17 @@ class MasksBuffer(QtWidgets.QWidget):
 
         self.mask_paths: list[Path] = []
         self.current_image_name = ""
-        self.editing_index: int | None = None  # какую маску редактируем (None = новая)
+        self.editing_index: int | None = None
 
-        title = QtWidgets.QLabel("Masks\nbuffer")
-        title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        title = QtWidgets.QLabel("Маски")
+        title.setObjectName("subheading")
+
+        self.count_label = QtWidgets.QLabel("0 масок")
+        self.count_label.setObjectName("secondary")
 
         self.list = QtWidgets.QListWidget()
         self.list.setViewMode(QtWidgets.QListView.ViewMode.IconMode)
-        self.list.setIconSize(QtCore.QSize(256, 256))
+        self.list.setIconSize(QtCore.QSize(_ICON_SIZE, _ICON_SIZE))
         self.list.setResizeMode(QtWidgets.QListView.ResizeMode.Adjust)
         self.list.setMovement(QtWidgets.QListView.Movement.Static)
         self.list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -38,23 +48,23 @@ class MasksBuffer(QtWidgets.QWidget):
         self.list.addAction(delete_action)
 
         layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
         layout.addWidget(title)
+        layout.addWidget(self.count_label)
         layout.addWidget(self.list)
 
-        self.setMinimumWidth(160)
+        self.setMinimumWidth(200)
 
     def all_mask_paths(self) -> list[Path]:
-        """Возвращает пути ко всем маскам всех изображений во временной папке."""
         return sorted(self.output_dir.glob("*_mask_*.png"))
 
     def set_image_name(self, image_name: str):
-        """Устанавливает имя изображения и загружает соответствующие маски с диска."""
         self.current_image_name = image_name
         self.editing_index = None
         self._load_masks_from_disk()
 
     def save_mask(self, mask: np.ndarray):
-        """Сохраняет маску: заменяет если editing_index задан, иначе добавляет новую."""
         if self.editing_index is not None:
             self._replace(self.editing_index, mask)
         else:
@@ -62,18 +72,18 @@ class MasksBuffer(QtWidgets.QWidget):
         self.editing_index = None
 
     def delete_selected(self):
-        """Удаляет выбранные маски из списка и с диска (чтобы glob не нашёл их при экспорте)."""
         for r in sorted([self.list.row(i) for i in self.list.selectedItems()], reverse=True):
             self.mask_paths.pop(r).unlink(missing_ok=True)
             self.list.takeItem(r)
         if self.editing_index is not None and self.editing_index >= len(self.mask_paths):
             self.editing_index = None
+        self._update_count()
 
     def clear(self):
-        """Сбрасывает UI-состояние буфера. Файлы во временной папке не трогает."""
         self.mask_paths.clear()
         self.list.clear()
         self.editing_index = None
+        self._update_count()
 
     # ── Приватные ──────────────────────────────────────────────────────────────
 
@@ -96,6 +106,7 @@ class MasksBuffer(QtWidgets.QWidget):
         item = QtWidgets.QListWidgetItem()
         item.setIcon(self._mask_to_icon(mask))
         self.list.addItem(item)
+        self._update_count()
 
     def _replace(self, index: int, mask: np.ndarray):
         if index < 0 or index >= len(self.mask_paths):
@@ -116,6 +127,17 @@ class MasksBuffer(QtWidgets.QWidget):
             item.setIcon(self._mask_to_icon(mask))
             self.list.addItem(item)
             del mask
+        self._update_count()
+
+    def _update_count(self):
+        n = len(self.mask_paths)
+        if n % 10 == 1 and n % 100 != 11:
+            word = "маска"
+        elif 2 <= n % 10 <= 4 and not (12 <= n % 100 <= 14):
+            word = "маски"
+        else:
+            word = "масок"
+        self.count_label.setText(f"{n} {word}")
 
     def _on_double_click(self, item: QtWidgets.QListWidgetItem):
         row = self.list.row(item)
@@ -129,17 +151,38 @@ class MasksBuffer(QtWidgets.QWidget):
         if self.list.itemAt(pos) is None:
             return
         menu = QtWidgets.QMenu(self)
-        act = menu.addAction("Delete")
+        act = menu.addAction("Удалить")
         if menu.exec(self.list.mapToGlobal(pos)) == act:
             self.delete_selected()
 
     @staticmethod
-    def _mask_to_icon(mask: np.ndarray, size=256):
+    def _mask_to_icon(mask: np.ndarray, size: int = _ICON_SIZE) -> QtGui.QIcon:
+        """Маска cyan на клетчатом фоне (checkerboard)."""
         h, w = mask.shape
+
+        # Масштабируем маску → QImage grayscale → QPixmap
         fmt = QtGui.QImage.Format.Format_Grayscale8
         qimg = QtGui.QImage(mask.tobytes(), w, h, w, fmt)
-        pm = QtGui.QPixmap.fromImage(qimg).scaled(
+        mask_pm = QtGui.QPixmap.fromImage(qimg).scaled(
             size, size,
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
             QtCore.Qt.TransformationMode.SmoothTransformation)
-        return QtGui.QIcon(pm)
+
+        # Рисуем: checkerboard → cyan маска поверх
+        result = QtGui.QPixmap(mask_pm.size())
+        p = QtGui.QPainter(result)
+        # Checkerboard
+        sw, sh = mask_pm.width(), mask_pm.height()
+        for row in range(0, sh, _CHECK_CELL):
+            for col in range(0, sw, _CHECK_CELL):
+                color = _CHECK_LIGHT if (row // _CHECK_CELL + col // _CHECK_CELL) % 2 == 0 else _CHECK_DARK
+                p.fillRect(col, row, _CHECK_CELL, _CHECK_CELL, color)
+        # Маска как cyan overlay
+        colored = QtGui.QPixmap(mask_pm.size())
+        colored.fill(_MASK_COLOR)
+        colored.setMask(mask_pm.createMaskFromColor(
+            QtGui.QColor(0, 0, 0), QtCore.Qt.MaskMode.MaskInColor))
+        p.drawPixmap(0, 0, colored)
+        p.end()
+
+        return QtGui.QIcon(result)

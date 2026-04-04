@@ -101,6 +101,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         self.setDragMode(_NONE)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.setMouseTracking(True)
+        self.viewport().setCursor(QtCore.Qt.CursorShape.CrossCursor)
 
         # Публичное состояние (читает window.py)
         self.image_np: Optional[np.ndarray] = None
@@ -112,7 +113,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
 
         # Кисть
         self._tool = "draw"
-        self._brush_r = 15
+        self._brush_r = 30
         self._painting = False
         self._last_pt: Optional[tuple] = None
 
@@ -161,7 +162,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         if self._brush_cursor is None:
             self._brush_cursor = QtWidgets.QGraphicsEllipseItem()
             self._brush_cursor.setPen(
-                QtGui.QPen(QtGui.QColor(255, 255, 255, 180), 1.5))
+                QtGui.QPen(QtGui.QColor(0, 0, 0, 220), 2.0))
             self._brush_cursor.setBrush(_NO_BRUSH)
             self._brush_cursor.setZValue(100)
             self._brush_cursor.setVisible(False)
@@ -195,6 +196,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
             self._overlay.clear()
         if self._brush_cursor:
             self._brush_cursor.setVisible(False)
+        self.viewport().setCursor(QtCore.Qt.CursorShape.CrossCursor)
 
     def redraw(self):
         if not self.edit_mode:
@@ -207,6 +209,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         self._overlay.fill_from_mask(self.current_mask)
         if self._brush_cursor:
             self._brush_cursor.setVisible(True)
+        self.viewport().setCursor(QtCore.Qt.CursorShape.BlankCursor)
         return True
 
     def load_mask_for_edit(self, mask: np.ndarray):
@@ -218,6 +221,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         self._overlay.fill_from_mask(mask)
         if self._brush_cursor:
             self._brush_cursor.setVisible(True)
+        self.viewport().setCursor(QtCore.Qt.CursorShape.BlankCursor)
 
     def finish_edit(self) -> Optional[np.ndarray]:
         if not self.edit_mode or self._overlay is None:
@@ -412,7 +416,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         if self._brush_cursor:
             r = self._brush_r
             self._brush_cursor.setVisible(True)
-            self._brush_cursor.setRect(pt.x() - r, pt.y() - r, 2*r, 2*r)
+            self._brush_cursor.setRect(pt.x() - r, pt.y() - r, 2 * r, 2 * r)
 
     # ── Утилиты ───────────────────────────────────────────────────────────────
 
