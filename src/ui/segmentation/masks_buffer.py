@@ -62,25 +62,15 @@ class MasksBuffer(QtWidgets.QWidget):
         self.editing_index = None
 
     def delete_selected(self):
-        """Удаляет выбранные маски из списка и с диска."""
-        rows = sorted([self.list.row(i) for i in self.list.selectedItems()], reverse=True)
-        for r in rows:
-            if r < len(self.mask_paths):
-                mask_path = self.mask_paths[r]
-                if mask_path.exists():
-                    mask_path.unlink()
-                self.mask_paths.pop(r)
+        """Удаляет выбранные маски из списка и с диска (чтобы glob не нашёл их при экспорте)."""
+        for r in sorted([self.list.row(i) for i in self.list.selectedItems()], reverse=True):
+            self.mask_paths.pop(r).unlink(missing_ok=True)
             self.list.takeItem(r)
-        # Сбрасываем editing_index если удалённая маска была редактируемой
         if self.editing_index is not None and self.editing_index >= len(self.mask_paths):
             self.editing_index = None
 
-    def clear(self, delete_files: bool = True):
-        """Очищает буфер масок."""
-        if delete_files:
-            for mask_path in self.mask_paths:
-                if mask_path.exists():
-                    mask_path.unlink()
+    def clear(self):
+        """Сбрасывает UI-состояние буфера. Файлы во временной папке не трогает."""
         self.mask_paths.clear()
         self.list.clear()
         self.editing_index = None
@@ -114,7 +104,7 @@ class MasksBuffer(QtWidgets.QWidget):
         self.list.item(index).setIcon(self._mask_to_icon(mask))
 
     def _load_masks_from_disk(self):
-        self.clear(delete_files=False)
+        self.clear()
         if not self.current_image_name:
             return
 
