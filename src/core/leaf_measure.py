@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-# ── Результат ────────────────────────────────────────────────────────────────
+# датаклассы результата
 
 
 @dataclass
@@ -39,7 +39,7 @@ class LeafMetrics:
     width_endpoints: tuple[tuple[float, float], tuple[float, float]]
 
 
-# ── Измерение ────────────────────────────────────────────────────────────────
+# измерение
 
 
 def measure_leaf(
@@ -51,21 +51,18 @@ def measure_leaf(
     """
     Измеряет лист по бинарной маске (uint8, 0/255).
 
-    Параметры:
-        unit   — название единицы измерения ("px", "мм", "см", …)
-        scale  — коэффициент пересчёта: единиц на пиксель.
-                 По умолчанию 1.0 (результат в пикселях).
+    unit   — название единицы ("px", "мм", "см", …)
+    scale  — пикселей на единицу; 1.0 = результат в пикселях.
 
-    Метод: PCA → главная ось → проекции (длина/ширина) →
-           поперечные сечения на заданных фракциях.
+    Алгоритм: PCA → главная ось → Feret-диаметры → поперечные сечения.
     """
-    # 1. Контур (наибольший внешний)
+    # наибольший внешний контур
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     if not contours:
         raise ValueError("Контур не найден в маске")
     contour = max(contours, key=cv2.contourArea)
 
-    # 2. PCA: главная ось (u) и перпендикуляр (v)
+    # PCA: ось длины (u) и перпендикуляр (v)
     ys, xs = np.nonzero(mask)
     pts = np.column_stack([xs, ys]).astype(np.float32)
     mean = pts.mean(axis=0)
@@ -76,7 +73,7 @@ def measure_leaf(
     u /= np.linalg.norm(u) + 1e-12
     v = np.array([-u[1], u[0]], dtype=np.float32)
 
-    # 3. Проекции → длина / ширина (Feret)
+    # проекции → Feret-диаметры
     proj_u = (pts - mean) @ u
     proj_v = (pts - mean) @ v
     umin, umax = float(proj_u.min()), float(proj_u.max())
@@ -85,10 +82,9 @@ def measure_leaf(
     length_px = umax - umin
     width_px = vmax - vmin
 
-    # 4. Ширины по фракциям
     widths = _measure_widths(mask, mean, u, v, umin, umax, width_px, fractions, scale)
 
-    # 5. Концы осей (для визуализации)
+    # концы осей для отрисовки
     p_len = (_to_tuple(mean + u * umin), _to_tuple(mean + u * umax))
     p_wid = (_to_tuple(mean + v * vmin), _to_tuple(mean + v * vmax))
 
@@ -106,7 +102,7 @@ def measure_leaf(
     )
 
 
-# ── Визуализация ─────────────────────────────────────────────────────────────
+# визуализация
 
 
 def save_measurement_visualization(
@@ -145,7 +141,7 @@ def save_measurement_visualization(
     plt.close(fig)
 
 
-# ── Вспомогательные ──────────────────────────────────────────────────────────
+# вспомогательные функции
 
 
 def _measure_widths(

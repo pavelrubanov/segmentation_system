@@ -12,7 +12,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         self.predictor = predictor
         self.segmentation_window = None
 
-        # ── Заголовок ─────────────────────────────────────────────────────
+        # заголовок
         title = QtWidgets.QLabel("Морфометрия листьев")
         title.setObjectName("heading")
         title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -21,7 +21,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         subtitle.setObjectName("subtitle")
         subtitle.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
-        # ── Кнопки-карточки ───────────────────────────────────────────────
+        # кнопки-карточки
         sp = self.style().standardIcon
 
         self.segment_btn = QtWidgets.QPushButton("  Сегментация изображений")
@@ -44,12 +44,12 @@ class NavigationWindow(QtWidgets.QMainWindow):
         self.quit_btn.setObjectName("flat")
         self.quit_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
 
-        # ── Сигналы ───────────────────────────────────────────────────────
+        # сигналы
         self.segment_btn.clicked.connect(self.on_segment_images)
         self.process_btn.clicked.connect(self.on_process_images)
         self.quit_btn.clicked.connect(self.close)
 
-        # ── Layout ────────────────────────────────────────────────────────
+        # лейаут
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(32, 28, 32, 20)
         layout.setSpacing(8)

@@ -22,11 +22,11 @@ class Window(QtWidgets.QMainWindow):
 
         sp = self.style().standardIcon
 
-        # ── Виджеты ───────────────────────────────────────────────────────
+        # основные виджеты
         self.canvas = SegmentationCanvas(predictor)
         self.masks_buffer = MasksBuffer()
 
-        # ── MenuBar ───────────────────────────────────────────────────────
+        # меню
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("Файл")
         file_menu.addAction(
@@ -48,7 +48,7 @@ class Window(QtWidgets.QMainWindow):
             QtGui.QKeySequence("Ctrl+Delete"),
             self.on_clean)
 
-        # ── ToolBar ───────────────────────────────────────────────────────
+        # тулбар
         toolbar = QtWidgets.QToolBar("Инструменты")
         toolbar.setMovable(False)
         toolbar.setIconSize(QtCore.QSize(22, 22))
@@ -118,13 +118,13 @@ class Window(QtWidgets.QMainWindow):
         toolbar.addWidget(self.nav_label)
         toolbar.addWidget(self.next_btn)
 
-        # ── StatusBar ─────────────────────────────────────────────────────
+        # статус-бар
         self._status_image = QtWidgets.QLabel("")
         self._status_mode = QtWidgets.QLabel("Промпты")
         self.statusBar().addWidget(self._status_image, 1)
         self.statusBar().addPermanentWidget(self._status_mode)
 
-        # ── Sidebar ───────────────────────────────────────────────────────
+        # боковая панель
         self.load_images_btn = QtWidgets.QPushButton(
             sp(QtWidgets.QStyle.StandardPixmap.SP_DialogOpenButton),
             " Загрузить изображения")
@@ -161,7 +161,7 @@ class Window(QtWidgets.QMainWindow):
         side_widget.setObjectName("sidePanel")
         side_widget.setLayout(side)
 
-        # ── Splitter (masks | canvas | sidebar) ──────────────────────────
+        # три колонки: буфер масок | канвас | сайдбар
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.addWidget(self.masks_buffer)
         splitter.addWidget(self.canvas)
@@ -174,7 +174,7 @@ class Window(QtWidgets.QMainWindow):
         self.setCentralWidget(splitter)
         self.resize(1920, 1080)
 
-        # ── Сигналы ───────────────────────────────────────────────────────
+        # сигналы
         self.load_images_btn.clicked.connect(self.on_load_images)
         self.clean_btn.clicked.connect(self.on_clean)
         self.save_to_buffer_btn.clicked.connect(self.on_save_to_buffer)
@@ -188,7 +188,7 @@ class Window(QtWidgets.QMainWindow):
 
         self._update_edit_ui()
 
-    # ── Действия ──────────────────────────────────────────────────────────────
+    # обработчики действий
 
     def on_load_images(self):
         fnames, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -270,7 +270,7 @@ class Window(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(
                 self, "Ошибка", f"Ошибка при сохранении: {exc}")
 
-    # ── Внутренние ────────────────────────────────────────────────────────────
+    # приватные методы
 
     def _load_current_image(self):
         if not self.images_data:

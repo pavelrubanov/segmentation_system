@@ -7,7 +7,7 @@ def apply_theme(app: QtWidgets.QApplication) -> None:
 
 
 def make_icon(draw_fn, size: int = 24) -> QtGui.QIcon:
-    """Создаёт иконку, рисуя draw_fn(painter, size) на прозрачном QPixmap."""
+    """Рисует иконку draw_fn(painter, size) на прозрачном QPixmap."""
     pm = QtGui.QPixmap(size, size)
     pm.fill(QtCore.Qt.GlobalColor.transparent)
     p = QtGui.QPainter(pm)
@@ -17,7 +17,7 @@ def make_icon(draw_fn, size: int = 24) -> QtGui.QIcon:
     return QtGui.QIcon(pm)
 
 
-# ── Программные иконки инструментов ──────────────────────────────────────────
+# иконки инструментов
 
 def icon_crosshair(size: int = 24) -> QtGui.QIcon:
     def _draw(p: QtGui.QPainter, s: int):
@@ -51,10 +51,10 @@ def icon_eraser(size: int = 24) -> QtGui.QIcon:
     return make_icon(_draw, size)
 
 
-# ── QSS ──────────────────────────────────────────────────────────────────────
+# стили
 
 _QSS = """
-/* ── Глобальные ─────────────────────────────────────────────────── */
+/* глобальные */
 
 QMainWindow, QDialog {
     background: #F5F6FA;
@@ -65,7 +65,7 @@ QWidget#sidePanel {
     border-left: 1px solid #D4D4D8;
 }
 
-/* ── QPushButton ────────────────────────────────────────────────── */
+/* QPushButton */
 
 QPushButton {
     background: #FFFFFF;
@@ -140,7 +140,7 @@ QPushButton#card:pressed {
     background: #D8E4FC;
 }
 
-/* ── QToolBar / QToolButton ─────────────────────────────────────── */
+/* QToolBar / QToolButton */
 
 QToolBar {
     background: #FFFFFF;
@@ -168,7 +168,7 @@ QToolButton:disabled {
     color: #A0A0A0;
 }
 
-/* ── QMenuBar / QMenu ───────────────────────────────────────────── */
+/* QMenuBar / QMenu */
 
 QMenuBar {
     background: #FFFFFF;
@@ -201,7 +201,7 @@ QMenu::separator {
     margin: 4px 8px;
 }
 
-/* ── QGroupBox ──────────────────────────────────────────────────── */
+/* QGroupBox */
 
 QGroupBox {
     border: 1px solid #D4D4D8;
@@ -220,7 +220,7 @@ QGroupBox::title {
 
 
 
-/* ── QRadioButton ───────────────────────────────────────────────── */
+/* QRadioButton */
 
 QRadioButton {
     spacing: 6px;
@@ -241,7 +241,7 @@ QRadioButton::indicator:hover {
     border-color: #3574F0;
 }
 
-/* ── QListWidget (masks buffer) ─────────────────────────────────── */
+/* QListWidget (буфер масок) */
 
 QListWidget {
     background: #FAFAFA;
@@ -262,7 +262,7 @@ QListWidget::item:hover {
     background: #F0F0F5;
 }
 
-/* ── QSplitter ──────────────────────────────────────────────────── */
+/* QSplitter */
 
 QSplitter::handle {
     background: #E8E8EC;
@@ -272,7 +272,7 @@ QSplitter::handle:hover {
     background: #3574F0;
 }
 
-/* ── QStatusBar ─────────────────────────────────────────────────── */
+/* QStatusBar */
 
 QStatusBar {
     background: #FFFFFF;
@@ -284,7 +284,7 @@ QStatusBar::item {
     border: none;
 }
 
-/* ── QLabel ──────────────────────────────────────────────────────── */
+/* QLabel */
 
 QLabel#heading {
     font-size: 18px;
@@ -308,7 +308,7 @@ QLabel#secondary {
     color: #6C707E;
 }
 
-/* ── QProgressDialog ────────────────────────────────────────────── */
+/* QProgressBar */
 
 QProgressBar {
     border: 1px solid #D4D4D8;
@@ -321,7 +321,7 @@ QProgressBar::chunk {
     border-radius: 3px;
 }
 
-/* ── QToolTip ───────────────────────────────────────────────────── */
+/* QToolTip */
 
 QToolTip {
     background: #1E1F22;

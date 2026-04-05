@@ -1,9 +1,9 @@
 """
-QGraphicsView-канвас для интерактивной сегментации.
+Интерактивный канвас сегментации на QGraphicsView.
 
-Prompts:  ЛКМ клик = +точка, ПКМ клик = −точка, ЛКМ drag = box.
-Edit:     ЛКМ = кисть/ластик.
-Ctrl+ЛКМ = pan (Qt ScrollHandDrag).  Колёсико = зум в точку курсора.
+ЛКМ = позитивная точка / box drag, ПКМ = негативная точка.
+Ctrl+ЛКМ = панорама, колесо = зум к курсору.
+В режиме редактирования ЛКМ = кисть или ластик.
 """
 
 import numpy as np
@@ -12,7 +12,7 @@ from typing import Optional
 from PyQt6 import QtCore, QtGui, QtWidgets
 from core.predictor import Predictor
 
-# ── Константы ─────────────────────────────────────────────────────────────────
+# константы
 
 _LMB  = QtCore.Qt.MouseButton.LeftButton
 _RMB  = QtCore.Qt.MouseButton.RightButton
@@ -20,7 +20,7 @@ _CTRL = QtCore.Qt.KeyboardModifier.ControlModifier
 _HAND = QtWidgets.QGraphicsView.DragMode.ScrollHandDrag
 _NONE = QtWidgets.QGraphicsView.DragMode.NoDrag
 
-# PyQt6: BrushStyle/PenStyle нельзя передавать напрямую в setBrush/setPen — нужна обёртка
+# setBrush/setPen не принимают BrushStyle/PenStyle напрямую, нужна обёртка
 _NO_BRUSH = QtGui.QBrush(QtCore.Qt.BrushStyle.NoBrush)
 _NO_PEN   = QtGui.QPen(QtCore.Qt.PenStyle.NoPen)
 
@@ -28,10 +28,8 @@ _MASK_COLOR = QtGui.QColor(0, 255, 255, 128)   # cyan semi-transparent
 _CLICK_THR  = 5                                  # px, порог клик vs drag
 
 
-# ── Overlay маски ─────────────────────────────────────────────────────────────
-
 class _Overlay(QtWidgets.QGraphicsItem):
-    """ARGB QImage поверх фото.  QPainter рисует кисть, numpy заполняет/читает."""
+    """ARGB QImage поверх изображения. Кисть рисует через QPainter, маску читаем через numpy."""
 
     def __init__(self, w: int, h: int):
         super().__init__()
@@ -54,7 +52,7 @@ class _Overlay(QtWidgets.QGraphicsItem):
         self.qimg.fill(QtCore.Qt.GlobalColor.transparent)
         self.update()
 
-    # numpy ↔ QImage  (Format_ARGB32 → в памяти BGRA на little-endian)
+    # Format_ARGB32 в памяти хранится как BGRA на little-endian
 
     def fill_from_mask(self, mask: np.ndarray):
         """Заполнить overlay из бинарной маски (H,W) uint8 0/255."""
@@ -82,7 +80,6 @@ class _Overlay(QtWidgets.QGraphicsItem):
         return img
 
 
-# ── Canvas ────────────────────────────────────────────────────────────────────
 
 class SegmentationCanvas(QtWidgets.QGraphicsView):
 
@@ -131,7 +128,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         self._dragging = False
         self._panning = False
 
-    # ── Public API ────────────────────────────────────────────────────────────
+    # --- публичный API ---
 
     def set_tool(self, t: str):
         if t in ("draw", "erase"):
@@ -228,7 +225,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
             return None
         return self._overlay.extract_mask()
 
-    # ── Клавиатура: Ctrl → pan ────────────────────────────────────────────────
+    # клавиатура (Ctrl → панорама)
 
     def enterEvent(self, e):
         self.setFocus()          # чтобы key events приходили сразу, без клика
@@ -243,7 +240,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
             self.setDragMode(_NONE)
         super().keyReleaseEvent(e)
 
-    # ── Мышь ──────────────────────────────────────────────────────────────────
+    # обработка мыши
 
     def wheelEvent(self, e):
         if self.image_np is None:
@@ -293,7 +290,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
             elif self._dragging and self._drag_rect and self._press_sc:
                 self._drag_rect.setRect(
                     QtCore.QRectF(self._press_sc, pt).normalized())
-        # Обязательно: ① pan ② внутренний трекинг мыши для AnchorUnderMouse
+        # нужно для pan и трекинга мыши в AnchorUnderMouse
         super().mouseMoveEvent(e)
 
     def mouseReleaseEvent(self, e):
@@ -329,7 +326,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
               and self._press_sc and not (e.modifiers() & _CTRL)):
             self._add_point(self._press_sc, positive=False)
 
-    # ── Точки / Box ───────────────────────────────────────────────────────────
+    # промпты: точки и box
 
     def _add_point(self, p, positive: bool):
         (self.pos_points if positive else self.neg_points).append(
@@ -369,7 +366,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
             self._box_item.setRect(rect)
         self._predict()
 
-    # ── Предиктор ─────────────────────────────────────────────────────────────
+    # вызов предиктора
 
     def _predict(self):
         if self.image_np is None or self.edit_mode:
@@ -382,7 +379,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         elif self._overlay:
             self._overlay.clear()
 
-    # ── Кисть (QPainter вместо numpy-штампов) ─────────────────────────────────
+    # рисование кистью через QPainter
 
     def _brush_stroke(self, x: float, y: float):
         if self._overlay is None:
@@ -418,7 +415,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
             self._brush_cursor.setVisible(True)
             self._brush_cursor.setRect(pt.x() - r, pt.y() - r, 2 * r, 2 * r)
 
-    # ── Утилиты ───────────────────────────────────────────────────────────────
+    # утилиты
 
     def _safe_remove(self, item):
         """removeItem с проверкой — PyQt6 падает если item не в этой сцене."""

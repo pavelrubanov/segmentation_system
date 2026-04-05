@@ -13,7 +13,7 @@ from PyQt6 import QtWidgets, QtCore
 from core.leaf_measure import measure_leaf, save_measurement_visualization
 
 
-# ── Настройки обработки ─────────────────────────────────────────────────────
+# настройки обработки
 
 
 @dataclass
@@ -38,7 +38,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(12)
 
-        # ── Файлы масок ─────────────────────────────────────────────
+        # файлы масок
         grp_files = QtWidgets.QGroupBox("Маски")
         fl = QtWidgets.QHBoxLayout(grp_files)
         self._lbl_files = QtWidgets.QLabel("Файлы не выбраны")
@@ -49,7 +49,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         fl.addWidget(btn_files)
         layout.addWidget(grp_files)
 
-        # ── Выходная директория ─────────────────────────────────────
+        # выходная директория
         grp_out = QtWidgets.QGroupBox("Выходная директория")
         ol = QtWidgets.QHBoxLayout(grp_out)
         self._lbl_out = QtWidgets.QLabel("Не выбрана")
@@ -60,7 +60,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         ol.addWidget(btn_out)
         layout.addWidget(grp_out)
 
-        # ── Количество поперечных сечений ───────────────────────────
+        # поперечные сечения
         grp_sec = QtWidgets.QGroupBox("Поперечные сечения")
         sl = QtWidgets.QHBoxLayout(grp_sec)
         sl.addWidget(QtWidgets.QLabel("Количество линий:"))
@@ -71,7 +71,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         sl.addStretch()
         layout.addWidget(grp_sec)
 
-        # ── Масштаб ─────────────────────────────────────────────────
+        # масштаб
         grp_scale = QtWidgets.QGroupBox("Масштаб")
         scl = QtWidgets.QGridLayout(grp_scale)
 
@@ -97,7 +97,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
 
         self._on_scale_toggled(False)
 
-        # ── Формат экспорта ─────────────────────────────────────────
+        # формат экспорта
         grp_fmt = QtWidgets.QGroupBox("Формат экспорта")
         fl2 = QtWidgets.QHBoxLayout(grp_fmt)
         self._rb_csv = QtWidgets.QRadioButton("CSV")
@@ -108,7 +108,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         fl2.addStretch()
         layout.addWidget(grp_fmt)
 
-        # ── Кнопки ──────────────────────────────────────────────────
+        # кнопки OK/Отмена
         btns = QtWidgets.QHBoxLayout()
         btns.addStretch()
         btn_cancel = QtWidgets.QPushButton("Отмена")
@@ -121,7 +121,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         btns.addWidget(self._btn_ok)
         layout.addLayout(btns)
 
-    # ── Слоты ───────────────────────────────────────────────────────
+    # слоты
 
     def _pick_files(self) -> None:
         files, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -146,7 +146,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
     def _update_ok(self) -> None:
         self._btn_ok.setEnabled(bool(self._files) and self._lbl_out.text() != "Не выбрана")
 
-    # ── Результат ───────────────────────────────────────────────────
+    # получение результата
 
     def settings(self) -> ProcessingSettings:
         use_scale = self._chk_scale.isChecked()
@@ -172,7 +172,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
         return f"Выбрано: {n} {word}"
 
 
-# ── Пакетная обработка ──────────────────────────────────────────────────────
+# пакетная обработка
 
 
 def _build_fractions(n: int) -> tuple[float, ...]:

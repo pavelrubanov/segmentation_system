@@ -85,7 +85,7 @@ class MasksBuffer(QtWidgets.QWidget):
         self.editing_index = None
         self._update_count()
 
-    # ── Приватные ──────────────────────────────────────────────────────────────
+    # приватные методы
 
     def _add(self, mask: np.ndarray):
         if not self.current_image_name:
@@ -160,7 +160,7 @@ class MasksBuffer(QtWidgets.QWidget):
         """Маска cyan на клетчатом фоне (checkerboard)."""
         h, w = mask.shape
 
-        # Масштабируем маску → QImage grayscale → QPixmap
+        # маска → grayscale QImage → QPixmap нужного размера
         fmt = QtGui.QImage.Format.Format_Grayscale8
         qimg = QtGui.QImage(mask.tobytes(), w, h, w, fmt)
         mask_pm = QtGui.QPixmap.fromImage(qimg).scaled(
@@ -168,16 +168,16 @@ class MasksBuffer(QtWidgets.QWidget):
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
             QtCore.Qt.TransformationMode.SmoothTransformation)
 
-        # Рисуем: checkerboard → cyan маска поверх
+        # рисуем шахматный фон, поверх кладём маску цветом
         result = QtGui.QPixmap(mask_pm.size())
         p = QtGui.QPainter(result)
-        # Checkerboard
+        # шахматный фон
         sw, sh = mask_pm.width(), mask_pm.height()
         for row in range(0, sh, _CHECK_CELL):
             for col in range(0, sw, _CHECK_CELL):
                 color = _CHECK_LIGHT if (row // _CHECK_CELL + col // _CHECK_CELL) % 2 == 0 else _CHECK_DARK
                 p.fillRect(col, row, _CHECK_CELL, _CHECK_CELL, color)
-        # Маска как cyan overlay
+        # cyan overlay по маске
         colored = QtGui.QPixmap(mask_pm.size())
         colored.fill(_MASK_COLOR)
         colored.setMask(mask_pm.createMaskFromColor(
