@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+
 import numpy as np
 from PIL import Image
 from PyQt6 import QtWidgets, QtCore
@@ -20,6 +23,7 @@ class ProcessingSettings:
     n_sections: int
     unit_name: str
     px_per_unit: Optional[float]  # None → без пересчёта
+    export_format: str  # "csv" или "xlsx"
 
 
 class ProcessingSettingsDialog(QtWidgets.QDialog):
@@ -93,6 +97,17 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
 
         self._on_scale_toggled(False)
 
+        # ── Формат экспорта ─────────────────────────────────────────
+        grp_fmt = QtWidgets.QGroupBox("Формат экспорта")
+        fl2 = QtWidgets.QHBoxLayout(grp_fmt)
+        self._rb_csv = QtWidgets.QRadioButton("CSV")
+        self._rb_xlsx = QtWidgets.QRadioButton("Excel (.xlsx)")
+        self._rb_csv.setChecked(True)
+        fl2.addWidget(self._rb_csv)
+        fl2.addWidget(self._rb_xlsx)
+        fl2.addStretch()
+        layout.addWidget(grp_fmt)
+
         # ── Кнопки ──────────────────────────────────────────────────
         btns = QtWidgets.QHBoxLayout()
         btns.addStretch()
@@ -141,6 +156,7 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
             n_sections=self._spin_sections.value(),
             unit_name=self._edit_unit.text().strip() or "мм",
             px_per_unit=self._spin_px.value() if use_scale else None,
+            export_format="xlsx" if self._rb_xlsx.isChecked() else "csv",
         )
 
     @staticmethod
@@ -162,6 +178,37 @@ class ProcessingSettingsDialog(QtWidgets.QDialog):
 def _build_fractions(n: int) -> tuple[float, ...]:
     """Равномерные фракции внутри (0, 1) для n поперечных сечений."""
     return tuple(i / (n + 1) for i in range(1, n + 1))
+
+
+def _save_xlsx(rows: list[dict[str, str]], path: Path) -> None:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Измерения"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="3574F0")
+    center = Alignment(horizontal="center")
+
+    cols = list(rows[0].keys())
+    for c, name in enumerate(cols, 1):
+        cell = ws.cell(row=1, column=c, value=name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+
+    for r, row in enumerate(rows, 2):
+        for c, key in enumerate(cols, 1):
+            raw = row[key]
+            try:
+                ws.cell(row=r, column=c, value=float(raw))
+            except ValueError:
+                ws.cell(row=r, column=c, value=raw)
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    wb.save(path)
 
 
 def run_processing(parent: QtWidgets.QWidget):
@@ -217,13 +264,15 @@ def run_processing(parent: QtWidgets.QWidget):
 
     progress.setValue(len(s.files))
 
-    # Сохранение CSV
     if rows:
-        csv_path = out_path / "measurements.csv"
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
-            writer.writeheader()
-            writer.writerows(rows)
+        if s.export_format == "xlsx":
+            _save_xlsx(rows, out_path / "measurements.xlsx")
+        else:
+            csv_path = out_path / "measurements.csv"
+            with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+                writer.writeheader()
+                writer.writerows(rows)
 
     QtWidgets.QMessageBox.information(
         parent, "Готово",

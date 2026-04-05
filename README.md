@@ -17,6 +17,3 @@ python main.py
 ![Демонстрация сегментации](https://github.com/pavelrubanov/segmentation_system/blob/main/Segmetation-demo.gif)
 
 
-
-Общая схема приложения
-![Архитектура](https://github.com/pavelrubanov/segmentation_system/blob/main/System%20arhictecture.png)
