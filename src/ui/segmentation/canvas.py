@@ -6,6 +6,7 @@ Ctrl+ЛКМ = панорама, колесо = зум к курсору.
 В режиме редактирования ЛКМ = кисть или ластик.
 """
 
+import cv2
 import numpy as np
 from typing import Optional
 
@@ -62,6 +63,47 @@ class _Overlay(QtWidgets.QGraphicsItem):
         arr[..., 1] = on * _MASK_COLOR.green()
         arr[..., 2] = on * _MASK_COLOR.red()
         arr[..., 3] = on * _MASK_COLOR.alpha()
+        self.update()
+
+    def fill_from_masks(self, masks: list[np.ndarray]):
+        """Отобразить набор масок разными цветами (золотой угол × 3 яруса HSV).
+
+        Большие маски рисуются первыми, маленькие — поверх.
+        Поверх заливок рисуется контур каждой маски — виден даже при перекрытии.
+        """
+        arr = self._numpy()
+        arr[:] = 0
+        _TIERS = [(240, 255), (140, 255), (220, 180)]
+
+        # Сортируем: большие первыми → маленькие всегда поверх
+        order = sorted(range(len(masks)), key=lambda i: masks[i].sum(), reverse=True)
+
+        colors: list[QtGui.QColor] = [QtGui.QColor()] * len(masks)
+        for i in order:
+            hue = int(i * 137.508) % 360
+            sat, val = _TIERS[i % 3]
+            colors[i] = QtGui.QColor.fromHsv(hue, sat, val, 150)
+            on = masks[i] > 0
+            arr[on, 0] = colors[i].blue()
+            arr[on, 1] = colors[i].green()
+            arr[on, 2] = colors[i].red()
+            arr[on, 3] = colors[i].alpha()
+
+        # Контуры поверх заливок — каждая маска видна при любом перекрытии
+        p = QtGui.QPainter(self.qimg)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, False)
+        for i, mask in enumerate(masks):
+            contours, _ = cv2.findContours(
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            c = colors[i]
+            pen_color = QtGui.QColor.fromHsv(c.hsvHue(), c.hsvSaturation(), 200, 255)
+            p.setPen(QtGui.QPen(pen_color, 2))
+            for cnt in contours:
+                pts = QtGui.QPolygonF(
+                    [QtCore.QPointF(float(pt[0][0]), float(pt[0][1])) for pt in cnt])
+                p.drawPolygon(pts)
+        p.end()
+
         self.update()
 
     def extract_mask(self) -> np.ndarray:
@@ -224,6 +266,14 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         if not self.edit_mode or self._overlay is None:
             return None
         return self._overlay.extract_mask()
+
+    def show_all_masks(self, masks: list[np.ndarray]):
+        """Показать все авто-маски разными цветами (без сохранения)."""
+        if self._overlay is None:
+            return
+        self.clean()
+        if masks:
+            self._overlay.fill_from_masks(masks)
 
     # клавиатура (Ctrl → панорама)
 

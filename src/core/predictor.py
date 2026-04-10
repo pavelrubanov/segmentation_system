@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from mobile_sam import sam_model_registry, SamPredictor
+from mobile_sam import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 
 class Predictor:
     def __init__(self, checkpoint_path: str):
@@ -10,6 +10,15 @@ class Predictor:
         mobile_sam.eval()
 
         self.sam_predictor = SamPredictor(mobile_sam)
+        self._mask_gen = SamAutomaticMaskGenerator(
+            mobile_sam,
+            points_per_side=8,            # 64 точки — один батч, быстро
+            points_per_batch=64,
+            pred_iou_thresh=0.80,
+            stability_score_thresh=0.88,  # не ниже — иначе фрагментирует текстуру клеток
+            box_nms_thresh=0.5,           # убирает дубли одного листа (64×3→~15 масок)
+            min_mask_region_area=800,
+        )
 
     def set_image(self, image):
         self.sam_predictor.set_image(image)
@@ -47,3 +56,9 @@ class Predictor:
         best_mask = masks[best_idx]
 
         return (best_mask * 255).astype(np.uint8)  # uint8 [H,W] 0/255
+
+    def predict_all(self, image: np.ndarray) -> list[np.ndarray]:
+        """Автоматически найти все маски на изображении (SAM AMG)."""
+        with torch.no_grad():
+            anns = self._mask_gen.generate(image)
+        return [(a["segmentation"].astype(np.uint8) * 255) for a in anns]

@@ -41,6 +41,19 @@ def icon_brush(size: int = 24) -> QtGui.QIcon:
     return make_icon(_draw, size)
 
 
+def icon_auto_segment(size: int = 24) -> QtGui.QIcon:
+    """Сетка из 4 кружков — иконка авто-сегментации."""
+    def _draw(p: QtGui.QPainter, s: int):
+        colors = ["#3574F0", "#36803F", "#E0720C", "#9B59B6"]
+        positions = [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)]
+        r = s * 0.18
+        p.setPen(QtCore.Qt.PenStyle.NoPen)
+        for (fx, fy), hex_color in zip(positions, colors):
+            p.setBrush(QtGui.QColor(hex_color))
+            p.drawEllipse(QtCore.QPointF(s * fx, s * fy), r, r)
+    return make_icon(_draw, size)
+
+
 def icon_eraser(size: int = 24) -> QtGui.QIcon:
     def _draw(p: QtGui.QPainter, s: int):
         pen = QtGui.QPen(QtGui.QColor("#1E1F22"), 2)

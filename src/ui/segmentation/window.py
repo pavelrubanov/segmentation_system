@@ -6,7 +6,7 @@ from PyQt6 import QtWidgets, QtCore, QtGui
 from core.image_data import ImageWithMasks
 from .masks_buffer import MasksBuffer
 from .canvas import SegmentationCanvas
-from ui.style import icon_crosshair, icon_brush, icon_eraser
+from ui.style import icon_crosshair, icon_brush, icon_eraser, icon_auto_segment
 
 
 class Window(QtWidgets.QMainWindow):
@@ -77,6 +77,11 @@ class Window(QtWidgets.QMainWindow):
         self._tool_group.addButton(self.brush_btn, 1)
         self._tool_group.addButton(self.eraser_btn, 2)
 
+        self.auto_segment_btn = QtWidgets.QToolButton()
+        self.auto_segment_btn.setIcon(icon_auto_segment())
+        self.auto_segment_btn.setToolTip("Авто-сегментация (найти все объекты)")
+        self.auto_segment_btn.setEnabled(False)
+
         self.brush_size_spin = QtWidgets.QSpinBox()
         self.brush_size_spin.setRange(1, 200)
         self.brush_size_spin.setValue(30)
@@ -88,6 +93,8 @@ class Window(QtWidgets.QMainWindow):
         toolbar.addWidget(self.pointer_btn)
         toolbar.addWidget(self.brush_btn)
         toolbar.addWidget(self.eraser_btn)
+        toolbar.addSeparator()
+        toolbar.addWidget(self.auto_segment_btn)
         toolbar.addSeparator()
         toolbar.addWidget(self.brush_size_spin)
 
@@ -175,6 +182,7 @@ class Window(QtWidgets.QMainWindow):
         # сигналы
         self.load_images_btn.clicked.connect(self.on_load_images)
         self.clean_btn.clicked.connect(self.on_clean)
+        self.auto_segment_btn.clicked.connect(self.on_auto_segment)
         self.save_to_buffer_btn.clicked.connect(self.on_save_to_buffer)
         self.prev_btn.clicked.connect(self.on_previous_image)
         self.next_btn.clicked.connect(self.on_next_image)
@@ -206,6 +214,21 @@ class Window(QtWidgets.QMainWindow):
         self.canvas.clean()
         self.canvas.redraw()
         self._update_edit_ui()
+
+    def on_auto_segment(self):
+        if self.canvas.image_np is None:
+            return
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+        try:
+            masks = self.predictor.predict_all(self.canvas.image_np)
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+        self.canvas.show_all_masks(masks)
+        self._status_mode.setText(f"Авто: найдено {len(masks)}")
+        self.info_label.setText(
+            f"Авто-сегментация завершена.\n"
+            f"Найдено объектов: {len(masks)}\n\n"
+            "Для ручной сегментации нажми «Очистить».")
 
     def on_save_to_buffer(self):
         """Двухшаговый сценарий: фиксация маски → редактирование → сохранение."""
@@ -275,6 +298,7 @@ class Window(QtWidgets.QMainWindow):
         data = self.images_data[self.current_image_idx]
         self.canvas.set_image(data.image)
         self.masks_buffer.set_image_name(data.name)
+        self.auto_segment_btn.setEnabled(True)
         self._update_nav()
         self._update_edit_ui()
 
@@ -295,6 +319,7 @@ class Window(QtWidgets.QMainWindow):
         self.brush_btn.setEnabled(editing)
         self.eraser_btn.setEnabled(editing)
         self.brush_size_spin.setEnabled(editing)
+        self.auto_segment_btn.setEnabled(not editing and self.canvas.image_np is not None)
 
         if editing:
             if not self.brush_btn.isChecked() and not self.eraser_btn.isChecked():
