@@ -3,8 +3,6 @@ import numpy as np
 from pathlib import Path
 
 from PyQt6 import QtWidgets, QtCore, QtGui
-from PIL import Image
-
 from core.image_data import ImageWithMasks
 from .masks_buffer import MasksBuffer
 from .canvas import SegmentationCanvas
@@ -197,8 +195,7 @@ class Window(QtWidgets.QMainWindow):
         if not fnames:
             return
         self.images_data = [
-            ImageWithMasks(image=np.array(Image.open(f).convert("RGB")),
-                           name=Path(f).name)
+            ImageWithMasks(path=f, name=Path(f).name)
             for f in fnames
         ]
         self.current_image_idx = 0
