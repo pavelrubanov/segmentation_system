@@ -4,9 +4,23 @@ from pathlib import Path
 
 from PyQt6 import QtWidgets, QtCore, QtGui
 from core.image_data import ImageWithMasks
+from core.predictor import Predictor
 from .masks_buffer import MasksBuffer
 from .canvas import SegmentationCanvas
 from ui.style import icon_crosshair, icon_brush, icon_eraser, icon_auto_segment
+
+
+class _AutoSegWorker(QtCore.QThread):
+    done = QtCore.pyqtSignal(list)
+
+    def __init__(self, predictor: Predictor, image: np.ndarray):
+        super().__init__()
+        self._predictor = predictor
+        self._image = image
+
+    def run(self):
+        masks = self._predictor.predict_all(self._image)
+        self.done.emit(masks)
 
 
 class Window(QtWidgets.QMainWindow):
@@ -23,6 +37,7 @@ class Window(QtWidgets.QMainWindow):
         # основные виджеты
         self.canvas = SegmentationCanvas(predictor)
         self.masks_buffer = MasksBuffer()
+        self._worker: _AutoSegWorker | None = None
 
         # меню
         menu_bar = self.menuBar()
@@ -218,12 +233,17 @@ class Window(QtWidgets.QMainWindow):
     def on_auto_segment(self):
         if self.canvas.image_np is None:
             return
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
-        try:
-            masks = self.predictor.predict_all(self.canvas.image_np)
-        finally:
-            QtWidgets.QApplication.restoreOverrideCursor()
+        self.auto_segment_btn.setEnabled(False)
+        self._status_mode.setText("Сегментация...")
+        self.info_label.setText("Выполняется авто-сегментация…")
+
+        self._worker = _AutoSegWorker(self.predictor, self.canvas.image_np)
+        self._worker.done.connect(self._on_auto_segment_done)
+        self._worker.start()
+
+    def _on_auto_segment_done(self, masks: list):
         self.canvas.show_all_masks(masks)
+        self.auto_segment_btn.setEnabled(True)
         self._status_mode.setText(f"Авто: найдено {len(masks)}")
         self.info_label.setText(
             f"Авто-сегментация завершена.\n"
