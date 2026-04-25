@@ -6,6 +6,10 @@ __pycache__/
 .idea/
 src/output
 
+# Тренировочные данные --- хранятся локально, в репо только пустые папки.
+data/*/*
+!data/*/.gitkeep
+
 # C extensions
 *.so
 
