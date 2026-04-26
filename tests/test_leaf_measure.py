@@ -34,7 +34,7 @@ def make_ellipse_mask(h: int, w: int) -> np.ndarray:
 class TestMeasureLeafBasic:
 
     def test_empty_mask_raises(self):
-        """Пустая маска → ValueError."""
+        """Пустая маска: ожидаем ValueError."""
         mask = np.zeros((100, 100), dtype=np.uint8)
         with pytest.raises(ValueError, match="Контур не найден"):
             measure_leaf(mask)
@@ -110,7 +110,7 @@ class TestMeasureLeafFractions:
         assert set(m.widths.keys()) == expected
 
     def test_custom_fractions_keys(self):
-        """Кастомные дроби → ровно эти ключи."""
+        """Кастомные дроби: ровно эти ключи."""
         mask = make_rect_mask(h=20, w=200)
         fracs = (0.25, 0.5, 0.75)
         m = measure_leaf(mask, fractions=fracs)

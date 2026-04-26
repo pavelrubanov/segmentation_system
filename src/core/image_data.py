@@ -1,21 +1,19 @@
-import numpy as np
 from dataclasses import dataclass, field
+
+import numpy as np
 from PIL import Image
 
 
 @dataclass
 class ImageWithMasks:
-    """Модель для хранения изображения и его масок.
-    Маски хранятся на диске, не в памяти, чтобы экономить RAM.
-    Изображение загружается лениво при первом обращении.
+    """Путь к изображению и список сохранённых для него масок.
+
+    Саму картинку не держим в памяти: на 4K-кадрах это съело бы гигабайты
+    при просмотре сотен файлов. Перечитываем с диска при каждой смене.
     """
-    path: str              # путь к файлу
-    name: str = ""         # имя изображения
-    _image: np.ndarray | None = field(default=None, repr=False, compare=False)
+    path: str
+    name: str = ""
+    mask_entries: list = field(default_factory=list)  # list[MaskEntry]
 
-    @property
-    def image(self) -> np.ndarray:
-        if self._image is None:
-            self._image = np.array(Image.open(self.path).convert("RGB"))
-        return self._image
-
+    def load_image_from_disk(self) -> np.ndarray:
+        return np.array(Image.open(self.path).convert("RGB"))

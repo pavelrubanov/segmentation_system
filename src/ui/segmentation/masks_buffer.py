@@ -1,19 +1,27 @@
 import tempfile
+from concurrent.futures import Future, ThreadPoolExecutor
+import cv2
 import numpy as np
 from pathlib import Path
+from typing import NamedTuple
 from PIL import Image
 from PyQt6 import QtWidgets, QtCore, QtGui
+from core.file_naming import crop_filename, mask_filename
+from core.io import format_count, read_rgb
+from core.leaf_pipeline import transform_leaf
 
 
 _ICON_SIZE = 128
-_MASK_COLOR = QtGui.QColor(0, 255, 255, 160)  # cyan для иконок
-_CHECK_LIGHT = QtGui.QColor(220, 220, 220)
-_CHECK_DARK = QtGui.QColor(200, 200, 200)
-_CHECK_CELL = 8
+_THUMB_LONG_SIDE = 384  # ~3× размера иконки --- источник для масок-иконок
+
+
+class MaskEntry(NamedTuple):
+    mask: Path   # полноразмерная RGB-картинка (фон чёрный за пределами листа), для редактирования
+    crop: Path   # препроцессированный RGB-кроп (для классификатора и измерений)
 
 
 class MasksBuffer(QtWidgets.QWidget):
-    mask_edit_requested = QtCore.pyqtSignal(np.ndarray)  # маска для редактирования
+    mask_edit_requested = QtCore.pyqtSignal(np.ndarray)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -21,8 +29,16 @@ class MasksBuffer(QtWidgets.QWidget):
         self._temp_dir_obj = tempfile.TemporaryDirectory(prefix="segmasks_")
         self.output_dir = Path(self._temp_dir_obj.name)
 
-        self.mask_paths: list[Path] = []
+        # Фоновая запись PNG: иконка ставится сразу из numpy, диск пишется в
+        # отдельных потоках. `_pending` хранит in-flight future по path ---
+        # при double-click / delete / save_and_leave ждём завершения.
+        self._executor = ThreadPoolExecutor(max_workers=4)
+        self._pending: dict[Path, Future] = {}
+
+        self.entries: list[MaskEntry] = []
         self.current_image_name = ""
+        self.image_np: np.ndarray | None = None
+        self.image_thumb: np.ndarray | None = None  # downscaled image для иконок
         self.editing_index: int | None = None
 
         title = QtWidgets.QLabel("Маски")
@@ -56,95 +72,139 @@ class MasksBuffer(QtWidgets.QWidget):
 
         self.setMinimumWidth(200)
 
-    def all_mask_paths(self) -> list[Path]:
-        return sorted(self.output_dir.glob("*_mask_*.png"))
-
-    def set_image_name(self, image_name: str):
+    def set_image(self, image_name: str, image_np: np.ndarray | None = None):
         self.current_image_name = image_name
-        self.editing_index = None
-        self._load_masks_from_disk()
-
-    def save_mask(self, mask: np.ndarray):
-        if self.editing_index is not None:
-            self._replace(self.editing_index, mask)
+        self.image_np = image_np
+        # Кэш для иконок: масштабируем longest side к _THUMB_LONG_SIDE,
+        # сохраняя пропорции. На 4K-кадре 16:9 это ~250 KB и размер 384×216.
+        if image_np is not None:
+            h, w = image_np.shape[:2]
+            scale = _THUMB_LONG_SIDE / max(h, w)
+            self.image_thumb = cv2.resize(
+                image_np, (int(round(w * scale)), int(round(h * scale))),
+                interpolation=cv2.INTER_AREA,
+            )
         else:
-            self._add(mask)
+            self.image_thumb = None
+        self.editing_index = None
+
+    def restore_entries(self, entries: list[MaskEntry]):
+        """Восстановить буфер из сохранённого списка (читаем превью с диска)."""
+        self.list.clear()
+        self.entries = list(entries)
+        self.editing_index = None
+        for e in self.entries:
+            item = QtWidgets.QListWidgetItem()
+            item.setIcon(self._icon_from_path(e.mask))
+            self.list.addItem(item)
+        self._update_count()
+
+    def wait_for_pending(self) -> None:
+        """Дождаться завершения всех фоновых записей PNG."""
+        for f in list(self._pending.values()):
+            if not f.done():
+                f.result()
+        self._pending.clear()
+
+    def save_mask(self, mask: np.ndarray, crop: np.ndarray | None = None):
+        """Сохранить маску. Если crop передан --- использовать его, иначе пересчитать."""
+        if self.editing_index is not None:
+            self._replace(self.editing_index, mask, crop)
+        else:
+            self._add(mask, crop)
         self.editing_index = None
 
     def delete_selected(self):
         for r in sorted([self.list.row(i) for i in self.list.selectedItems()], reverse=True):
-            self.mask_paths.pop(r).unlink(missing_ok=True)
+            e = self.entries.pop(r)
+            for p in e:
+                self._wait_for(p)
+                p.unlink(missing_ok=True)
             self.list.takeItem(r)
-        if self.editing_index is not None and self.editing_index >= len(self.mask_paths):
+        if self.editing_index is not None and self.editing_index >= len(self.entries):
             self.editing_index = None
         self._update_count()
 
     def clear(self):
-        self.mask_paths.clear()
+        self.entries.clear()
         self.list.clear()
         self.editing_index = None
         self._update_count()
 
     # приватные методы
 
-    def _add(self, mask: np.ndarray):
+    def _make_entry(self, base_name: str, idx: int) -> MaskEntry:
+        d = self.output_dir
+        return MaskEntry(
+            mask=d / mask_filename(base_name, idx),
+            crop=d / crop_filename(base_name, idx),
+        )
+
+    def _write_files(self, e: MaskEntry, mask: np.ndarray,
+                     crop: np.ndarray | None = None) -> np.ndarray:
+        """Готовим full-size masked RGB и crop, пишем PNG в фон.
+
+        Возвращает icon-source --- masked thumb-кадр (~384×216), на котором
+        строится иконка без касания 4K-данных.
+        """
+        masked = cv2.bitwise_and(self.image_np, self.image_np, mask=mask)
+        if crop is None:
+            crop = transform_leaf(masked)
+        self._submit(e.mask, masked)
+        self._submit(e.crop, crop)
+
+        # Иконка: маска downscaled к thumb, накладывается на image_thumb.
+        h, w = self.image_thumb.shape[:2]
+        mask_thumb = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+        return cv2.bitwise_and(self.image_thumb, self.image_thumb, mask=mask_thumb)
+
+    def _submit(self, path: Path, arr: np.ndarray) -> None:
+        """Кладём задачу записи PNG в фон. Если уже идёт запись в этот path
+        (replace одной и той же маски) --- ждём предыдущую перед новой."""
+        old = self._pending.pop(path, None)
+        if old is not None and not old.done():
+            old.result()
+        self._pending[path] = self._executor.submit(_write_png, path, arr)
+
+    def _wait_for(self, path: Path) -> None:
+        """Ждём конкретную фоновую запись (для double-click, delete)."""
+        f = self._pending.pop(path, None)
+        if f is not None and not f.done():
+            f.result()
+
+    def _add(self, mask: np.ndarray, crop: np.ndarray | None = None):
         if not self.current_image_name:
             return
         base_name = Path(self.current_image_name).stem
-
-        next_idx = 0
-        for mask_path in self.output_dir.glob(f"{base_name}_mask_*.png"):
-            idx_str = mask_path.stem.split("_mask_")[-1]
-            if idx_str.isnumeric():
-                next_idx = max(int(idx_str), next_idx)
-        next_idx += 1
-
-        mask_path = self.output_dir / f"{base_name}_mask_{next_idx:04d}.png"
-        Image.fromarray(mask, mode="L").save(mask_path)
-        self.mask_paths.append(mask_path)
+        next_idx = (max((int(e.mask.stem.rsplit("_", 1)[1]) for e in self.entries), default=0) + 1)
+        e = self._make_entry(base_name, next_idx)
+        icon_src = self._write_files(e, mask, crop)
+        self.entries.append(e)
 
         item = QtWidgets.QListWidgetItem()
-        item.setIcon(self._mask_to_icon(mask))
+        item.setIcon(self._icon_from_array(icon_src))
         self.list.addItem(item)
         self._update_count()
 
-    def _replace(self, index: int, mask: np.ndarray):
-        if index < 0 or index >= len(self.mask_paths):
-            return
-        Image.fromarray(mask, mode="L").save(self.mask_paths[index])
-        self.list.item(index).setIcon(self._mask_to_icon(mask))
-
-    def _load_masks_from_disk(self):
-        self.clear()
-        if not self.current_image_name:
-            return
-
-        base_name = Path(self.current_image_name).stem
-        for mask_path in sorted(self.output_dir.glob(f"{base_name}_mask_*.png")):
-            self.mask_paths.append(mask_path)
-            mask = np.array(Image.open(mask_path).convert("L"), dtype=np.uint8)
-            item = QtWidgets.QListWidgetItem()
-            item.setIcon(self._mask_to_icon(mask))
-            self.list.addItem(item)
-            del mask
-        self._update_count()
+    def _replace(self, index: int, mask: np.ndarray, crop: np.ndarray | None = None):
+        e = self.entries[index]
+        icon_src = self._write_files(e, mask, crop)
+        self.list.item(index).setIcon(self._icon_from_array(icon_src))
 
     def _update_count(self):
-        n = len(self.mask_paths)
-        if n % 10 == 1 and n % 100 != 11:
-            word = "маска"
-        elif 2 <= n % 10 <= 4 and not (12 <= n % 100 <= 14):
-            word = "маски"
-        else:
-            word = "масок"
-        self.count_label.setText(f"{n} {word}")
+        self.count_label.setText(format_count(
+            len(self.entries), ("маска", "маски", "масок")))
 
     def _on_double_click(self, item: QtWidgets.QListWidgetItem):
         row = self.list.row(item)
-        if row < 0 or row >= len(self.mask_paths):
+        if row < 0 or row >= len(self.entries):
             return
         self.editing_index = row
-        mask = np.array(Image.open(self.mask_paths[row]).convert("L"), dtype=np.uint8)
+        path = self.entries[row].mask
+        # Если запись ещё в полёте --- ждём.
+        self._wait_for(path)
+        rgb = read_rgb(path)
+        mask = (rgb.sum(axis=2) > 0).astype(np.uint8) * 255
         self.mask_edit_requested.emit(mask)
 
     def _menu(self, pos):
@@ -156,33 +216,35 @@ class MasksBuffer(QtWidgets.QWidget):
             self.delete_selected()
 
     @staticmethod
-    def _mask_to_icon(mask: np.ndarray, size: int = _ICON_SIZE) -> QtGui.QIcon:
-        """Маска cyan на клетчатом фоне (checkerboard)."""
-        h, w = mask.shape
-
-        # маска → grayscale QImage → QPixmap нужного размера
-        fmt = QtGui.QImage.Format.Format_Grayscale8
-        qimg = QtGui.QImage(mask.tobytes(), w, h, w, fmt)
-        mask_pm = QtGui.QPixmap.fromImage(qimg).scaled(
+    def _icon_from_path(path: Path, size: int = _ICON_SIZE) -> QtGui.QIcon:
+        """Иконка = downscale RGB-картинки с диска (фон уже чёрный)."""
+        pm = QtGui.QPixmap(str(path))
+        if pm.isNull():
+            return QtGui.QIcon()
+        return QtGui.QIcon(pm.scaled(
             size, size,
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation)
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        ))
 
-        # рисуем шахматный фон, поверх кладём маску цветом
-        result = QtGui.QPixmap(mask_pm.size())
-        p = QtGui.QPainter(result)
-        # шахматный фон
-        sw, sh = mask_pm.width(), mask_pm.height()
-        for row in range(0, sh, _CHECK_CELL):
-            for col in range(0, sw, _CHECK_CELL):
-                color = _CHECK_LIGHT if (row // _CHECK_CELL + col // _CHECK_CELL) % 2 == 0 else _CHECK_DARK
-                p.fillRect(col, row, _CHECK_CELL, _CHECK_CELL, color)
-        # cyan overlay по маске
-        colored = QtGui.QPixmap(mask_pm.size())
-        colored.fill(_MASK_COLOR)
-        colored.setMask(mask_pm.createMaskFromColor(
-            QtGui.QColor(0, 0, 0), QtCore.Qt.MaskMode.MaskInColor))
-        p.drawPixmap(0, 0, colored)
-        p.end()
+    @staticmethod
+    def _icon_from_array(arr: np.ndarray, size: int = _ICON_SIZE) -> QtGui.QIcon:
+        """Иконка прямо из numpy RGB --- без чтения с диска."""
+        if not arr.flags["C_CONTIGUOUS"]:
+            arr = np.ascontiguousarray(arr)
+        h, w = arr.shape[:2]
+        qimg = QtGui.QImage(
+            arr.data, w, h, arr.strides[0],
+            QtGui.QImage.Format.Format_RGB888,
+        ).copy()  # detach от numpy, иначе пиксели уплывут вместе с массивом
+        pm = QtGui.QPixmap.fromImage(qimg)
+        return QtGui.QIcon(pm.scaled(
+            size, size,
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        ))
 
-        return QtGui.QIcon(result)
+
+def _write_png(path: Path, arr: np.ndarray) -> None:
+    """Воркер: PNG-запись. Top-level чтобы не таскать `self` по тредам."""
+    Image.fromarray(arr).save(path)

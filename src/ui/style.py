@@ -7,7 +7,7 @@ def apply_theme(app: QtWidgets.QApplication) -> None:
 
 
 def make_icon(draw_fn, size: int = 24) -> QtGui.QIcon:
-    """Рисует иконку draw_fn(painter, size) на прозрачном QPixmap."""
+    """Рисует иконку через переданный draw_fn(painter, size). Без файлов."""
     pm = QtGui.QPixmap(size, size)
     pm.fill(QtCore.Qt.GlobalColor.transparent)
     p = QtGui.QPainter(pm)
@@ -42,7 +42,7 @@ def icon_brush(size: int = 24) -> QtGui.QIcon:
 
 
 def icon_auto_segment(size: int = 24) -> QtGui.QIcon:
-    """Сетка из 4 кружков — иконка авто-сегментации."""
+    """Четыре цветных кружка --- намёк на «много объектов разом»."""
     def _draw(p: QtGui.QPainter, s: int):
         colors = ["#3574F0", "#36803F", "#E0720C", "#9B59B6"]
         positions = [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)]

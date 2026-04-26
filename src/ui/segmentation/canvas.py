@@ -1,9 +1,8 @@
-"""
-Интерактивный канвас сегментации на QGraphicsView.
+"""Интерактивный канвас сегментации на QGraphicsView.
 
-ЛКМ = позитивная точка / box drag, ПКМ = негативная точка.
-Ctrl+ЛКМ = панорама, колесо = зум к курсору.
-В режиме редактирования ЛКМ = кисть или ластик.
+Управление: ЛКМ --- позитивная точка или drag для box, ПКМ --- негативная точка.
+Ctrl+ЛКМ --- панорамирование, колесо --- зум к курсору.
+В режиме правки ЛКМ работает как кисть/ластик (в зависимости от инструмента).
 """
 
 import cv2
@@ -28,9 +27,15 @@ _NO_PEN   = QtGui.QPen(QtCore.Qt.PenStyle.NoPen)
 _MASK_COLOR = QtGui.QColor(0, 255, 255, 128)   # cyan semi-transparent
 _CLICK_THR  = 5                                  # px, порог клик vs drag
 
+# Раскраска нескольких масок: углы по золотому сечению + три яруса
+# (S, V) для разнообразия, чтобы соседние маски не сливались.
+_GOLDEN_ANGLE_DEG = 137.508
+_HSV_TIERS = [(240, 255), (140, 255), (220, 180)]
+
 
 class _Overlay(QtWidgets.QGraphicsItem):
-    """ARGB QImage поверх изображения. Кисть рисует через QPainter, маску читаем через numpy."""
+    """ARGB-полупрозрачный слой поверх картинки. Рисуем через QPainter,
+    маску достаём напрямую из буфера QImage как numpy-массив."""
 
     def __init__(self, w: int, h: int):
         super().__init__()
@@ -53,10 +58,10 @@ class _Overlay(QtWidgets.QGraphicsItem):
         self.qimg.fill(QtCore.Qt.GlobalColor.transparent)
         self.update()
 
-    # Format_ARGB32 в памяти хранится как BGRA на little-endian
+    # Внимание: Format_ARGB32 на little-endian лежит в памяти как BGRA
 
     def fill_from_mask(self, mask: np.ndarray):
-        """Заполнить overlay из бинарной маски (H,W) uint8 0/255."""
+        """Закрасить overlay цветом маски в местах, где она ненулевая."""
         arr = self._numpy()
         on = (mask > 0).astype(np.uint8)
         arr[..., 0] = on * _MASK_COLOR.blue()
@@ -65,23 +70,24 @@ class _Overlay(QtWidgets.QGraphicsItem):
         arr[..., 3] = on * _MASK_COLOR.alpha()
         self.update()
 
-    def fill_from_masks(self, masks: list[np.ndarray]):
-        """Отобразить набор масок разными цветами (золотой угол × 3 яруса HSV).
-
-        Большие маски рисуются первыми, маленькие — поверх.
-        Поверх заливок рисуется контур каждой маски — виден даже при перекрытии.
+    def fill_from_masks(
+        self,
+        masks: list[np.ndarray]
+    ):
+        """Раскрашивает несколько масок --- разные цвета берём по золотому углу
+        в HSV (3 яруса насыщенности). Поверх заливок рисуем контуры, иначе
+        перекрывающиеся маски сливаются в кашу.
         """
         arr = self._numpy()
         arr[:] = 0
-        _TIERS = [(240, 255), (140, 255), (220, 180)]
 
-        # Сортируем: большие первыми → маленькие всегда поверх
+        # Сначала большие, потом мелкие --- так маленькие всегда сверху
         order = sorted(range(len(masks)), key=lambda i: masks[i].sum(), reverse=True)
 
         colors: list[QtGui.QColor] = [QtGui.QColor()] * len(masks)
         for i in order:
-            hue = int(i * 137.508) % 360
-            sat, val = _TIERS[i % 3]
+            hue = int(i * _GOLDEN_ANGLE_DEG) % 360
+            sat, val = _HSV_TIERS[i % 3]
             colors[i] = QtGui.QColor.fromHsv(hue, sat, val, 150)
             on = masks[i] > 0
             arr[on, 0] = colors[i].blue()
@@ -89,7 +95,6 @@ class _Overlay(QtWidgets.QGraphicsItem):
             arr[on, 2] = colors[i].red()
             arr[on, 3] = colors[i].alpha()
 
-        # Контуры поверх заливок — каждая маска видна при любом перекрытии
         p = QtGui.QPainter(self.qimg)
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, False)
         for i, mask in enumerate(masks):
@@ -107,7 +112,7 @@ class _Overlay(QtWidgets.QGraphicsItem):
         self.update()
 
     def extract_mask(self) -> np.ndarray:
-        """Извлечь маску из альфа-канала → (H,W) uint8 0/255."""
+        """Снять текущую маску из альфа-канала overlay'я."""
         return (self._numpy()[..., 3] > 0).astype(np.uint8) * 255
 
     def _numpy(self):
@@ -142,7 +147,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         self.setMouseTracking(True)
         self.viewport().setCursor(QtCore.Qt.CursorShape.CrossCursor)
 
-        # Публичное состояние (читает window.py)
+        # публичное состояние --- читает window.py
         self.image_np: Optional[np.ndarray] = None
         self.pos_points: list[tuple] = []
         self.neg_points: list[tuple] = []
@@ -150,13 +155,13 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         self.current_mask: Optional[np.ndarray] = None
         self.edit_mode = False
 
-        # Кисть
+        # инструмент кисти
         self._tool = "draw"
         self._brush_r = 30
         self._painting = False
         self._last_pt: Optional[tuple] = None
 
-        # Элементы сцены (создаются лениво в set_image)
+        # элементы сцены --- создаём лениво при первом set_image
         self._pixmap: Optional[QtWidgets.QGraphicsPixmapItem] = None
         self._overlay: Optional[_Overlay] = None
         self._box_item: Optional[QtWidgets.QGraphicsRectItem] = None
@@ -164,7 +169,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         self._brush_cursor: Optional[QtWidgets.QGraphicsEllipseItem] = None
         self._pt_items: list = []
 
-        # Мышь
+        # состояние мыши между press/move/release
         self._press_vp: Optional[QtCore.QPoint] = None
         self._press_sc: Optional[QtCore.QPointF] = None
         self._dragging = False
@@ -268,14 +273,15 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
         return self._overlay.extract_mask()
 
     def show_all_masks(self, masks: list[np.ndarray]):
-        """Показать все авто-маски разными цветами (без сохранения)."""
+        """Показать все маски разом (без сохранения в буфер)."""
         if self._overlay is None:
             return
         self.clean()
-        if masks:
-            self._overlay.fill_from_masks(masks)
+        if not masks:
+            return
+        self._overlay.fill_from_masks(masks)
 
-    # клавиатура (Ctrl → панорама)
+    # клавиатура: зажатый Ctrl переключает в режим панорамы
 
     def enterEvent(self, e):
         self.setFocus()          # чтобы key events приходили сразу, без клика
@@ -304,7 +310,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
     def mousePressEvent(self, e):
         if self.image_np is None:
             return
-        # Ctrl + ЛКМ → pan (Qt делает всё сам)
+        # Ctrl + ЛКМ --- панорамирование, его рулит сам Qt
         if self.dragMode() == _HAND and e.button() == _LMB:
             self._panning = True
             super().mousePressEvent(e)
@@ -320,7 +326,7 @@ class SegmentationCanvas(QtWidgets.QGraphicsView):
                 self._brush_stroke(self._press_sc.x(), self._press_sc.y())
             return
 
-        # Prompts: ЛКМ → потенциальный box
+        # режим промптов: пока ЛКМ зажата --- может вырасти box
         if e.button() == _LMB:
             self._dragging = True
             pen = QtGui.QPen(QtGui.QColor(255, 255, 0), 2)

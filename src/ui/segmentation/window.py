@@ -3,28 +3,48 @@ import numpy as np
 from pathlib import Path
 
 from PyQt6 import QtWidgets, QtCore, QtGui
+from classifier import find_available_leaf_types, get_classifier
 from core.image_data import ImageWithMasks
 from core.predictor import Predictor
 from .masks_buffer import MasksBuffer
 from .canvas import SegmentationCanvas
+from core.leaf_pipeline import auto_segment
 from ui.style import icon_crosshair, icon_brush, icon_eraser, icon_auto_segment
+
+_CLASSIFIER_WEIGHTS_DIR = Path(__file__).parent.parent.parent.parent / "models"
 
 
 class _AutoSegWorker(QtCore.QThread):
-    done = QtCore.pyqtSignal(list)
+    """Фоновая авто-сегментация: вызывает `auto_segment`, фильтрует
+    результат через классификатор (оставляет только `good_leaf`)."""
+    done = QtCore.pyqtSignal(list, int)  # kept_pairs, total_before_filter
+    failed = QtCore.pyqtSignal(str)
 
-    def __init__(self, predictor: Predictor, image: np.ndarray):
+    def __init__(self, predictor: Predictor, image: np.ndarray,
+                 classifier_weights: str | None):
         super().__init__()
         self._predictor = predictor
         self._image = image
+        self._weights = classifier_weights
 
     def run(self):
-        masks = self._predictor.predict_all(self._image)
-        self.done.emit(masks)
+        try:
+            pairs = auto_segment(self._image, self._predictor)
+            total = len(pairs)
+            if self._weights and pairs:
+                clf = get_classifier(self._weights)
+                labels = clf.classify_batch([c for _, c in pairs])
+                pairs = [p for p, (cls, _) in zip(pairs, labels) if cls == "good_leaf"]
+            self.done.emit(pairs, total)
+        except Exception as exc:
+            self.failed.emit(str(exc))
 
 
 class Window(QtWidgets.QMainWindow):
-    def __init__(self, predictor, parent=None):
+    """Окно интерактивной сегментации: промпты, кисть/ластик, авто-сегмент
+    одного кадра. Пакетный сценарий --- в `ui/measure_images.py`."""
+
+    def __init__(self, predictor: Predictor, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Система сегментации")
         self.predictor = predictor
@@ -37,7 +57,7 @@ class Window(QtWidgets.QMainWindow):
         # основные виджеты
         self.canvas = SegmentationCanvas(predictor)
         self.masks_buffer = MasksBuffer()
-        self._worker: _AutoSegWorker | None = None
+        self._auto_worker: _AutoSegWorker | None = None
 
         # меню
         menu_bar = self.menuBar()
@@ -94,8 +114,21 @@ class Window(QtWidgets.QMainWindow):
 
         self.auto_segment_btn = QtWidgets.QToolButton()
         self.auto_segment_btn.setIcon(icon_auto_segment())
-        self.auto_segment_btn.setToolTip("Авто-сегментация (найти все объекты)")
+        self.auto_segment_btn.setToolTip(
+            "Авто-сегментация всех объектов с фильтром по классификатору "
+            "(оставляются только 'хорошие' листы выбранного типа)")
         self.auto_segment_btn.setEnabled(False)
+
+        self.leaf_type_combo = QtWidgets.QComboBox()
+        self.leaf_type_combo.setToolTip("Тип листа --- классификатор для отбора 'хороших' листов")
+        self.leaf_type_combo.setFixedHeight(35)
+        self.leaf_type_combo.setMinimumWidth(160)
+        leaf_types = find_available_leaf_types(str(_CLASSIFIER_WEIGHTS_DIR))
+        for leaf_type, weights in leaf_types:
+            self.leaf_type_combo.addItem(leaf_type.replace("_", " ").title(), weights)
+        if not leaf_types:
+            self.leaf_type_combo.addItem("нет моделей", None)
+            self.leaf_type_combo.setEnabled(False)
 
         self.brush_size_spin = QtWidgets.QSpinBox()
         self.brush_size_spin.setRange(1, 200)
@@ -110,10 +143,11 @@ class Window(QtWidgets.QMainWindow):
         toolbar.addWidget(self.eraser_btn)
         toolbar.addSeparator()
         toolbar.addWidget(self.auto_segment_btn)
+        toolbar.addWidget(self.leaf_type_combo)
         toolbar.addSeparator()
         toolbar.addWidget(self.brush_size_spin)
 
-        # Spacer → навигация справа в тулбаре
+        # spacer оттесняет навигацию вправо
         spacer = QtWidgets.QWidget()
         spacer.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
                              QtWidgets.QSizePolicy.Policy.Preferred)
@@ -231,28 +265,49 @@ class Window(QtWidgets.QMainWindow):
         self._update_edit_ui()
 
     def on_auto_segment(self):
+        """Авто-сегментация с фильтром по классификатору: только 'хорошие' листы."""
         if self.canvas.image_np is None:
             return
+        weights = self.leaf_type_combo.currentData() if self.leaf_type_combo.isEnabled() else None
         self.auto_segment_btn.setEnabled(False)
         self._status_mode.setText("Сегментация...")
         self.info_label.setText("Выполняется авто-сегментация…")
 
-        self._worker = _AutoSegWorker(self.predictor, self.canvas.image_np)
-        self._worker.done.connect(self._on_auto_segment_done)
-        self._worker.start()
+        self._auto_worker = _AutoSegWorker(self.predictor, self.canvas.image_np, weights)
+        self._auto_worker.done.connect(self._on_auto_segment_done)
+        self._auto_worker.failed.connect(self._on_auto_segment_failed)
+        self._auto_worker.start()
 
-    def _on_auto_segment_done(self, masks: list):
-        self.canvas.show_all_masks(masks)
+    def _on_auto_segment_failed(self, err: str):
+        self._auto_worker = None
         self.auto_segment_btn.setEnabled(True)
-        self._status_mode.setText(f"Авто: найдено {len(masks)}")
+        self._status_mode.setText("Промпты")
+        self.info_label.setText("Авто-сегментация не выполнена.")
+        QtWidgets.QMessageBox.critical(self, "Ошибка авто-сегментации", err)
+
+    def _on_auto_segment_done(self, pairs: list, total: int):
+        """pairs --- уже отфильтрованные классификатором; total --- до фильтра."""
+        masks = [m for m, _ in pairs]
+        self.canvas.show_all_masks(masks)
+        # Кроп уже посчитан в auto_segment, передаём его в буфер,
+        # иначе transform_leaf отработает ещё раз --- лишняя работа.
+        self.masks_buffer.editing_index = None
+        for mask, crop in pairs:
+            self.masks_buffer.save_mask(mask, crop)
+        self._auto_worker = None
+        self.auto_segment_btn.setEnabled(True)
+        self._status_mode.setText(f"Авто: {len(pairs)} из {total}")
         self.info_label.setText(
             f"Авто-сегментация завершена.\n"
-            f"Найдено объектов: {len(masks)}\n\n"
-            "Для ручной сегментации нажми «Очистить».")
+            f"Найдено объектов: {total} (после дедупа).\n"
+            f"Хороших листьев: {len(pairs)} (после классификатора).\n"
+            "Все маски добавлены в буфер слева — двойной клик откроет для редактирования.\n\n"
+            "Для ручной сегментации нажми «Очистить»."
+        )
 
     def on_save_to_buffer(self):
-        """Двухшаговый сценарий: фиксация маски → редактирование → сохранение."""
-        # Шаг 2: сохраняем отредактированную маску
+        """Двухшаговый сценарий: фиксация маски, правка кистью, сохранение."""
+        # Второй клик: маска уже в edit-режиме --- сохраняем отредактированную
         if self.canvas.edit_mode:
             mask = self.canvas.finish_edit()
             if mask is None:
@@ -264,7 +319,7 @@ class Window(QtWidgets.QMainWindow):
             self._update_edit_ui()
             return
 
-        # Шаг 1: фиксируем маску предиктора → включаем edit mode
+        # Первый клик: фиксируем маску предиктора и включаем редактирование
         if self.canvas.current_mask is None:
             self._warn("Нет маски",
                        "Сначала поставь точки и/или box, "
@@ -279,17 +334,20 @@ class Window(QtWidgets.QMainWindow):
 
     def on_previous_image(self):
         if self.images_data and self.current_image_idx > 0:
+            self._flush_entries()
             self.current_image_idx -= 1
             self._load_current_image()
 
     def on_next_image(self):
         if self.images_data and self.current_image_idx < len(self.images_data) - 1:
+            self._flush_entries()
             self.current_image_idx += 1
             self._load_current_image()
 
     def on_save_and_leave(self):
-        mask_paths = self.masks_buffer.all_mask_paths()
-        if not mask_paths:
+        self._flush_entries()
+        entries = [e for img in self.images_data for e in img.mask_entries]
+        if not entries:
             self._warn("Нет масок", "Нет сохранённых масок для экспорта.")
             return
 
@@ -299,12 +357,14 @@ class Window(QtWidgets.QMainWindow):
             return
 
         try:
+            self.masks_buffer.wait_for_pending()
             dest = Path(save_dir)
-            for p in mask_paths:
-                shutil.copy2(p, dest / p.name)
+            for e in entries:
+                for p in e:
+                    shutil.copy2(p, dest / p.name)
             QtWidgets.QMessageBox.information(
                 self, "Успех",
-                f"Сохранено масок: {len(mask_paths)}\nПапка: {dest}")
+                f"Сохранено масок: {len(entries)} из {len(self.images_data)} изображений\nПапка: {dest}")
             self.close()
         except Exception as exc:
             QtWidgets.QMessageBox.critical(
@@ -312,12 +372,22 @@ class Window(QtWidgets.QMainWindow):
 
     # приватные методы
 
+    def _flush_entries(self):
+        self.images_data[self.current_image_idx].mask_entries = list(self.masks_buffer.entries)
+
     def _load_current_image(self):
         if not self.images_data:
             return
         data = self.images_data[self.current_image_idx]
-        self.canvas.set_image(data.image)
-        self.masks_buffer.set_image_name(data.name)
+        try:
+            img = data.load_image_from_disk()  # читаем с диска, в RAM не держим
+        except Exception as exc:
+            self._warn("Ошибка чтения",
+                       f"Не удалось открыть {data.name}:\n{exc}")
+            return
+        self.canvas.set_image(img)
+        self.masks_buffer.set_image(data.name, img)
+        self.masks_buffer.restore_entries(data.mask_entries)
         self.auto_segment_btn.setEnabled(True)
         self._update_nav()
         self._update_edit_ui()
@@ -376,7 +446,7 @@ class Window(QtWidgets.QMainWindow):
                 "Далее нажми 'Фиксировать маску'.")
 
     def _on_mask_edit_requested(self, mask: np.ndarray):
-        """Двойной клик по маске в буфере → загрузить для редактирования."""
+        """Двойной клик по маске в буфере: подгружаем её на канвас и входим в режим правки."""
         if self.canvas.image_np is None:
             return
         self.canvas.clean()

@@ -65,7 +65,7 @@ class TestPredictorInit:
 class TestPredictNoPrompts:
 
     def test_no_points_no_box_returns_none(self, predictor):
-        """Нет ни точек, ни bounding box → None."""
+        """Нет ни точек, ни bounding box --- ожидаем None."""
         assert predictor.predict([], [], None) is None
 
     def test_sam_predict_not_called_when_no_prompts(self, predictor):
@@ -80,7 +80,7 @@ class TestPredictNoPrompts:
 class TestPredictWithPrompts:
 
     def test_positive_point_returns_mask(self, predictor):
-        """Одна позитивная точка → результат не None."""
+        """Одна позитивная точка --- результат не None."""
         predictor.sam_predictor.predict.return_value = _fake_predict(50, 60)
         result = predictor.predict(pos_points=[(25, 25)], neg_points=[], box=None)
         assert result is not None
@@ -108,7 +108,7 @@ class TestPredictWithPrompts:
         """Выбирается маска с наибольшим score."""
         h, w = 40, 40
         masks = np.zeros((3, h, w), dtype=bool)
-        masks[0, :, :] = False   # лучший score → индекс 2
+        masks[0, :, :] = False   # лучший score у индекса 2
         masks[1, :10, :10] = True
         masks[2, :, :] = True    # этот должен быть выбран
         scores = np.array([0.4, 0.6, 0.95])

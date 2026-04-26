@@ -1,64 +1,77 @@
-import torch
+"""Обёртка над MobileSAM. Маски возвращаются как есть (uint8 0/255), без
+препроцессинга --- его делает leaf_pipeline на этапе сохранения/измерений."""
+from __future__ import annotations
+
 import numpy as np
-from mobile_sam import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
+import torch
+from mobile_sam import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
+
 
 class Predictor:
     def __init__(self, checkpoint_path: str):
-        model_type = "vit_t"
-        mobile_sam = sam_model_registry[model_type](checkpoint=checkpoint_path)
-        mobile_sam.to(device="cpu")
-        mobile_sam.eval()
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        mobile_sam = sam_model_registry["vit_t"](checkpoint=checkpoint_path)
+        mobile_sam.to(device=self.device).eval()
 
         self.sam_predictor = SamPredictor(mobile_sam)
         self._mask_gen = SamAutomaticMaskGenerator(
             mobile_sam,
-            points_per_side=8,            # 64 точки - один батч, быстро
+            points_per_side=8,
             points_per_batch=64,
             pred_iou_thresh=0.80,
-            stability_score_thresh=0.88,  # не ниже - иначе фрагментирует текстуру клеток
-            box_nms_thresh=0.5,           # убирает дубли одного листа (64×3→~15 масок)
-            min_mask_region_area=800,
+            stability_score_thresh=0.88
         )
 
-    def set_image(self, image):
+    def set_image(self, image: np.ndarray) -> None:
         self.sam_predictor.set_image(image)
 
-    def predict(self, pos_points, neg_points, box):
-        has_points = (len(pos_points) + len(neg_points)) > 0
-        has_box = box is not None
-
-        if not has_points and not has_box:
+    def predict(
+        self,
+        pos_points: list[tuple[float, float]],
+        neg_points: list[tuple[float, float]],
+        box: tuple[float, float, float, float] | None,
+    ) -> np.ndarray | None:
+        """Лучшая из 3 SAM-масок по точкам и/или bbox.
+        Размер маски совпадает с исходным изображением (uint8 0/255).
+        None --- если промптов нет."""
+        n_pts = len(pos_points) + len(neg_points)
+        if n_pts == 0 and box is None:
             return None
 
-        point_coords = None
-        point_labels = None
-        if (len(pos_points) + len(neg_points)) > 0:
-            pts_all = pos_points + neg_points
-            point_coords = np.array(pts_all, dtype=np.float32)
-            point_labels = np.array(
-                [1] * len(pos_points) + [0] * len(neg_points),
-                dtype=np.int32,
-            )
+        coords = labels = None
+        if n_pts > 0:
+            coords = np.array(pos_points + neg_points, dtype=np.float32)
+            labels = np.array([1] * len(pos_points) + [0] * len(neg_points), dtype=np.int32)
 
-        box_np = None
-        if box is not None:
-            box_np = np.array(box, dtype=np.float32)  # XYXY
+        box_np = np.array(box, dtype=np.float32) if box is not None else None
 
         with torch.no_grad():
             masks, scores, _ = self.sam_predictor.predict(
-                point_coords=point_coords,
-                point_labels=point_labels,
+                point_coords=coords,
+                point_labels=labels,
                 box=box_np,
                 multimask_output=True,
             )
 
-        best_idx = int(np.argmax(scores))
-        best_mask = masks[best_idx]
+        best = masks[int(np.argmax(scores))]
+        return (best * 255).astype(np.uint8)
 
-        return (best_mask * 255).astype(np.uint8)  # uint8 [H,W] 0/255
-
-    def predict_all(self, image: np.ndarray) -> list[np.ndarray]:
-        """Автоматически найти все маски на изображении (SAM AMG)."""
+    def predict_all(
+        self,
+        image: np.ndarray,
+        min_area_frac: float = 0.001,
+        max_area_frac: float = 0.7,
+    ) -> list[np.ndarray]:
+        """Автосегментация (SAM AMG). Площадь маски считается долей от
+        всего кадра: меньше min_area_frac --- мусор, больше max_area_frac ---
+        захват фона целиком."""
         with torch.inference_mode():
             anns = self._mask_gen.generate(image)
-        return [(a["segmentation"].astype(np.uint8) * 255) for a in anns]
+        total = image.shape[0] * image.shape[1]
+        min_px = int(total * min_area_frac)
+        max_px = int(total * max_area_frac)
+        return [
+            (a["segmentation"].astype(np.uint8) * 255)
+            for a in anns
+            if min_px <= a["area"] <= max_px
+        ]

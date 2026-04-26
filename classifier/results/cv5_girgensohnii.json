@@ -1,0 +1,1311 @@
+{
+  "k": 5,
+  "leaf_type": "girgensohnii",
+  "n_trees": 300,
+  "max_depth": 6,
+  "lr": 0.1,
+  "mean_accuracy": 0.9450611153552331,
+  "std_accuracy": 0.004402145048609351,
+  "fold_results": [
+    {
+      "fold": 1,
+      "accuracy": 0.9411764705882353,
+      "per_class": [
+        {
+          "class": "good_leaf",
+          "precision": 0.9047619047619048,
+          "recall": 0.9193548387096774,
+          "f1": 0.912,
+          "support": 62
+        },
+        {
+          "class": "bad_leaf",
+          "precision": 0.9525423728813559,
+          "recall": 0.9366666666666666,
+          "f1": 0.9445378151260504,
+          "support": 300
+        },
+        {
+          "class": "non_leaf",
+          "precision": 0.9359605911330049,
+          "recall": 0.9547738693467337,
+          "f1": 0.945273631840796,
+          "support": 199
+        }
+      ],
+      "cm": [
+        [
+          57,
+          5,
+          0
+        ],
+        [
+          6,
+          281,
+          13
+        ],
+        [
+          0,
+          9,
+          190
+        ]
+      ]
+    },
+    {
+      "fold": 2,
+      "accuracy": 0.9429590017825312,
+      "per_class": [
+        {
+          "class": "good_leaf",
+          "precision": 0.8656716417910447,
+          "recall": 0.9354838709677419,
+          "f1": 0.8992248062015503,
+          "support": 62
+        },
+        {
+          "class": "bad_leaf",
+          "precision": 0.9620689655172414,
+          "recall": 0.93,
+          "f1": 0.9457627118644069,
+          "support": 300
+        },
+        {
+          "class": "non_leaf",
+          "precision": 0.9411764705882353,
+          "recall": 0.964824120603015,
+          "f1": 0.9528535980148882,
+          "support": 199
+        }
+      ],
+      "cm": [
+        [
+          58,
+          4,
+          0
+        ],
+        [
+          9,
+          279,
+          12
+        ],
+        [
+          0,
+          7,
+          192
+        ]
+      ]
+    },
+    {
+      "fold": 3,
+      "accuracy": 0.9447415329768271,
+      "per_class": [
+        {
+          "class": "good_leaf",
+          "precision": 0.9032258064516129,
+          "recall": 0.9032258064516129,
+          "f1": 0.9032258064516129,
+          "support": 62
+        },
+        {
+          "class": "bad_leaf",
+          "precision": 0.9621993127147767,
+          "recall": 0.9333333333333333,
+          "f1": 0.9475465313028766,
+          "support": 300
+        },
+        {
+          "class": "non_leaf",
+          "precision": 0.9326923076923077,
+          "recall": 0.9748743718592965,
+          "f1": 0.9533169533169533,
+          "support": 199
+        }
+      ],
+      "cm": [
+        [
+          56,
+          6,
+          0
+        ],
+        [
+          6,
+          280,
+          14
+        ],
+        [
+          0,
+          5,
+          194
+        ]
+      ]
+    },
+    {
+      "fold": 4,
+      "accuracy": 0.9428571428571428,
+      "per_class": [
+        {
+          "class": "good_leaf",
+          "precision": 0.9672131147540983,
+          "recall": 0.9516129032258065,
+          "f1": 0.959349593495935,
+          "support": 62
+        },
+        {
+          "class": "bad_leaf",
+          "precision": 0.9437086092715232,
+          "recall": 0.95,
+          "f1": 0.9468438538205981,
+          "support": 300
+        },
+        {
+          "class": "non_leaf",
+          "precision": 0.934010152284264,
+          "recall": 0.9292929292929293,
+          "f1": 0.9316455696202531,
+          "support": 198
+        }
+      ],
+      "cm": [
+        [
+          59,
+          3,
+          0
+        ],
+        [
+          2,
+          285,
+          13
+        ],
+        [
+          0,
+          14,
+          184
+        ]
+      ]
+    },
+    {
+      "fold": 5,
+      "accuracy": 0.9535714285714286,
+      "per_class": [
+        {
+          "class": "good_leaf",
+          "precision": 0.8615384615384616,
+          "recall": 0.9180327868852459,
+          "f1": 0.8888888888888888,
+          "support": 61
+        },
+        {
+          "class": "bad_leaf",
+          "precision": 0.9628378378378378,
+          "recall": 0.95,
+          "f1": 0.9563758389261745,
+          "support": 300
+        },
+        {
+          "class": "non_leaf",
+          "precision": 0.9698492462311558,
+          "recall": 0.9698492462311558,
+          "f1": 0.9698492462311558,
+          "support": 199
+        }
+      ],
+      "cm": [
+        [
+          56,
+          5,
+          0
+        ],
+        [
+          9,
+          285,
+          6
+        ],
+        [
+          0,
+          6,
+          193
+        ]
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "fold": 1,
+      "file": "2964_0085_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "2976_0069_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 1,
+      "file": "3191_0059_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 1,
+      "file": "3284_0003_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3341_0012_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3344_0081_leaf_crop_006.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3393_0243_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3393_0245_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3526_0018_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3526_0019_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3531_0121_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3534_0032_leaf_crop_006.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3633_0039_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 1,
+      "file": "3647_0027_leaf_crop_003.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 1,
+      "file": "3692_0031_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3727_0029_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3987_0022_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 1,
+      "file": "878_0022_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "l0096_leaf_crop_006.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 1,
+      "file": "3013_0022_leaf_crop_004.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 1,
+      "file": "3647_0030_leaf_crop_004.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 1,
+      "file": "3834_0048_leaf_crop_004.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 1,
+      "file": "l0057_leaf_crop_006.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 1,
+      "file": "l0073_leaf_crop_006.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 1,
+      "file": "2965_0099_leaf_crop_008.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "2976_0068_leaf_crop_003.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3269_0050_leaf_crop_011.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3341_0007_leaf_crop_007.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3341_0065_leaf_crop_008.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3531_0049_leaf_crop_002.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3534_0031_leaf_crop_006.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "3633_0040_leaf_crop_008.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 1,
+      "file": "l0052_leaf_crop_013.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "2954_0073_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "2957_0098_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "2994_0135_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "3191_0065_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "3281_0170_leaf_crop_006.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "3283_0141_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "3341_0009_leaf_crop_002.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "3522_0122_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "3537_0050_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "3537_0054_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "3706_0004_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "4004_0023_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "4004_0024_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "l0032_leaf_crop_012.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "l0056_leaf_crop_012.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "l0057_leaf_crop_009.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "l0058_leaf_crop_007.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "l0096_leaf_crop_009.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "l0113_leaf_crop_003.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "l0115_leaf_crop_002.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 2,
+      "file": "l0115_leaf_crop_007.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "2973_0014_leaf_crop_004.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 2,
+      "file": "3013_0029_leaf_crop_006.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 2,
+      "file": "3191_0058_leaf_crop_005.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 2,
+      "file": "3292_0126_leaf_crop_004.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 2,
+      "file": "3269_0050_leaf_crop_009.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "3531_0122_leaf_crop_009.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "3692_0026_leaf_crop_000.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "l0073_leaf_crop_012.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "l0090_leaf_crop_005.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "l0090_leaf_crop_007.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 2,
+      "file": "l0118_leaf_crop_009.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "121_170_0035_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "2964_0082_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3191_0062_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3269_0050_leaf_crop_004.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 3,
+      "file": "3282_0003_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3282_0003_leaf_crop_004.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 3,
+      "file": "3282_0005_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3341_0009_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3521_0108_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3633_0040_leaf_crop_004.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 3,
+      "file": "3694_0098_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3698_0228_leaf_crop_014.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3726_0045_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "878_0026_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "l0040_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 3,
+      "file": "l0051_leaf_crop_003.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "l0053_leaf_crop_004.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "l0067_leaf_crop_002.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 3,
+      "file": "l0110_leaf_crop_007.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 3,
+      "file": "l0115_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3191_0058_leaf_crop_010.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 3,
+      "file": "3191_0059_leaf_crop_008.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 3,
+      "file": "3537_0004_leaf_crop_001.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 3,
+      "file": "3633_0039_leaf_crop_001.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 3,
+      "file": "3770_0002_leaf_crop_003.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 3,
+      "file": "l0097_leaf_crop_008.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 3,
+      "file": "3039_0050_leaf_crop_007.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "3534_0030_leaf_crop_010.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "l0065_leaf_crop_014.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "l0065_leaf_crop_016.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 3,
+      "file": "l0090_leaf_crop_014.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "2954_0073_leaf_crop_006.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 4,
+      "file": "2976_0074_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3281_0171_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3281_0176_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3390_0057_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3531_0122_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3698_0224_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3770_0004_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0041_leaf_crop_006.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0057_leaf_crop_008.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0057_leaf_crop_011.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0058_leaf_crop_009.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0062_leaf_crop_004.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 4,
+      "file": "l0074_leaf_crop_011.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0105_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3191_0059_leaf_crop_010.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 4,
+      "file": "3850_0033_leaf_crop_001.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 4,
+      "file": "4004_0025_leaf_crop_004.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 4,
+      "file": "2992_0021_leaf_crop_002.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "2994_0079_leaf_crop_004.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3013_0040_leaf_crop_000.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3279_0115_leaf_crop_000.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3282_0003_leaf_crop_006.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3534_0030_leaf_crop_008.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3647_0031_leaf_crop_011.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3655_0073_leaf_crop_009.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3706_0001_leaf_crop_000.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "3706_0003_leaf_crop_006.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0055_leaf_crop_006.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0062_leaf_crop_002.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0110_leaf_crop_011.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 4,
+      "file": "l0118_leaf_crop_011.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "2976_0069_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "3191_0058_leaf_crop_008.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "3191_0059_leaf_crop_006.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "3279_0115_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "3280_0002_leaf_crop_000.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "344_0183_leaf_crop_007.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "3530_0069_leaf_crop_006.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "3534_0026_leaf_crop_001.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "3537_0050_leaf_crop_007.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "3633_0039_leaf_crop_004.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "3759_0025_leaf_crop_005.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "3836_0046_leaf_crop_004.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "l0052_leaf_crop_008.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "l0073_leaf_crop_011.png",
+      "true": "bad_leaf",
+      "pred": "non_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "l0110_leaf_crop_003.png",
+      "true": "bad_leaf",
+      "pred": "good_leaf",
+      "error": "FN"
+    },
+    {
+      "fold": 5,
+      "file": "2994_0079_leaf_crop_003.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 5,
+      "file": "3191_0060_leaf_crop_005.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 5,
+      "file": "l0075_leaf_crop_004.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 5,
+      "file": "l0096_leaf_crop_008.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 5,
+      "file": "ыед0093_leaf_crop_000.png",
+      "true": "good_leaf",
+      "pred": "bad_leaf",
+      "error": "FP"
+    },
+    {
+      "fold": 5,
+      "file": "2954_0077_leaf_crop_003.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "3531_0128_leaf_crop_002.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "3531_0128_leaf_crop_010.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "3633_0041_leaf_crop_014.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "3698_0224_leaf_crop_005.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    },
+    {
+      "fold": 5,
+      "file": "3759_0032_leaf_crop_005.png",
+      "true": "non_leaf",
+      "pred": "bad_leaf",
+      "error": "other"
+    }
+  ]
+}

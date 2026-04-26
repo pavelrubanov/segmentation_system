@@ -1,24 +1,29 @@
-"""Измерение метрик листа по бинарной маске."""
+"""Измерение длины, ширины и поперечных сечений листа.
+
+Вход --- RGB-кроп из `core.leaf_pipeline.transform_leaf()`:
+  - главная ось вертикальна (строки = длина, столбцы = ширина),
+  - апекс вверху,
+  - чёрный фон вне листа.
+
+Поэтому ничего поворачивать тут не надо: длина = высота bbox, ширина =
+максимум по строкам, поперечные сечения --- чтение пикселей в выбранных строках.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
-import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-
-
-# датаклассы результата
 
 
 @dataclass
 class SectionWidth:
     """Ширина листа в одном поперечном сечении."""
     width: float                            # в единицах unit
-    p0: Optional[tuple[float, float]]       # начало отрезка (x, y)
-    p1: Optional[tuple[float, float]]       # конец отрезка (x, y)
-    center: tuple[float, float]             # центр сечения на главной оси
+    p0: Optional[tuple[float, float]]       # левый край сечения (x, y)
+    p1: Optional[tuple[float, float]]       # правый край (x, y)
+    center: tuple[float, float]             # центр сечения
 
 
 @dataclass
@@ -26,174 +31,108 @@ class LeafMetrics:
     """Результат измерения листа."""
     length: float
     width: float
-    unit: str                                   # название единицы ("px", "мм", …)
-
-    contour: np.ndarray                         # (N, 2) int  — (x, y)
-    widths: dict[float, SectionWidth]           # fraction → ширина
-
-    # PCA-данные (для визуализации)
-    mean_xy: tuple[float, float]
-    axis_u: tuple[float, float]                 # единичный вектор длины
-    axis_v: tuple[float, float]                 # единичный вектор ширины (перпенд.)
-    length_endpoints: tuple[tuple[float, float], tuple[float, float]]
-    width_endpoints: tuple[tuple[float, float], tuple[float, float]]
+    unit: str                                  # "px", "мм", "см", ...
+    widths: dict[float, SectionWidth]          # доля длины: ширина в этом сечении
 
 
-# измерение
+def _crop_to_mask(crop: np.ndarray) -> np.ndarray:
+    """RGB-кроп с чёрным фоном вернуть как bool-маску листа."""
+    return crop.sum(axis=2) > 0
 
 
 def measure_leaf(
-    mask: np.ndarray,
+    crop: np.ndarray,
     fractions: Sequence[float] = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875),
     unit: str = "px",
     scale: float = 1.0,
 ) -> LeafMetrics:
+    """Длина = высота bbox, ширина = его ширина. На каждой доле длины меряем
+    расстояние от крайнего левого до крайнего правого пикселя листа.
+    `scale` --- единиц на пиксель (1.0 = вернуть пиксели).
     """
-    Измеряет лист по бинарной маске (uint8, 0/255).
+    mask = _crop_to_mask(crop)
+    if not mask.any():
+        raise ValueError("Кроп пуст (нет пикселей листа)")
 
-    unit   — название единицы ("px", "мм", "см", …)
-    scale  — пикселей на единицу; 1.0 = результат в пикселях.
+    ys, xs = np.where(mask)
+    y0, y1 = int(ys.min()), int(ys.max())
+    x0, x1 = int(xs.min()), int(xs.max())
+    length_px = y1 - y0 + 1
+    width_px  = x1 - x0 + 1
 
-    Алгоритм: PCA → главная ось → Feret-диаметры → поперечные сечения.
-    """
-    # наибольший внешний контур
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    if not contours:
-        raise ValueError("Контур не найден в маске")
-    contour = max(contours, key=cv2.contourArea)
-
-    # PCA: ось длины (u) и перпендикуляр (v)
-    ys, xs = np.nonzero(mask)
-    pts = np.column_stack([xs, ys]).astype(np.float32)
-    mean = pts.mean(axis=0)
-
-    cov = np.cov(pts.T)
-    eigvals, eigvecs = np.linalg.eigh(cov)
-    u = eigvecs[:, np.argmax(eigvals)].astype(np.float32)
-    u /= np.linalg.norm(u) + 1e-12
-    v = np.array([-u[1], u[0]], dtype=np.float32)
-
-    # проекции → Feret-диаметры
-    proj_u = (pts - mean) @ u
-    proj_v = (pts - mean) @ v
-    umin, umax = float(proj_u.min()), float(proj_u.max())
-    vmin, vmax = float(proj_v.min()), float(proj_v.max())
-
-    length_px = umax - umin
-    width_px = vmax - vmin
-
-    widths = _measure_widths(mask, mean, u, v, umin, umax, width_px, fractions, scale)
-
-    # концы осей для отрисовки
-    p_len = (_to_tuple(mean + u * umin), _to_tuple(mean + u * umax))
-    p_wid = (_to_tuple(mean + v * vmin), _to_tuple(mean + v * vmax))
+    widths: dict[float, SectionWidth] = {}
+    for frac in fractions:
+        row = int(round(y0 + frac * (y1 - y0)))
+        row = min(max(row, 0), mask.shape[0] - 1)
+        row_xs = np.where(mask[row])[0]
+        if row_xs.size == 0:
+            widths[frac] = SectionWidth(
+                width=0.0, p0=None, p1=None,
+                center=((x0 + x1) / 2.0, float(row)),
+            )
+            continue
+        left, right = int(row_xs[0]), int(row_xs[-1])
+        w_px = right - left + 1
+        widths[frac] = SectionWidth(
+            width=w_px * scale,
+            p0=(float(left),  float(row)),
+            p1=(float(right), float(row)),
+            center=((left + right) / 2.0, float(row)),
+        )
 
     return LeafMetrics(
         length=length_px * scale,
         width=width_px * scale,
         unit=unit,
-        contour=contour.reshape(-1, 2),
         widths=widths,
-        mean_xy=_to_tuple(mean),
-        axis_u=(float(u[0]), float(u[1])),
-        axis_v=(float(v[0]), float(v[1])),
-        length_endpoints=p_len,
-        width_endpoints=p_wid,
     )
 
 
-# визуализация
+def build_fractions(n: int) -> tuple[float, ...]:
+    """n равномерных долей внутри (0, 1) для поперечных сечений."""
+    return tuple(i / (n + 1) for i in range(1, n + 1))
+
+
+def column_names_for(fractions: Sequence[float], unit: str) -> list[str]:
+    """Имена колонок для CSV/XLSX: image, length_<unit>, width_<unit>, width_<frac>_<unit>...
+    Без поля 'crop' --- его добавляет export-модуль, если нужна миниатюра.
+    """
+    cols = ["image", f"length_{unit}", f"width_{unit}"]
+    cols += [f"width_{f:.3f}_{unit}" for f in fractions]
+    return cols
 
 
 def save_measurement_visualization(
-    mask: np.ndarray,
+    crop: np.ndarray,
     metrics: LeafMetrics,
     out_path: str,
     dpi: int = 150,
 ) -> None:
-    """Сохраняет визуализацию измерения в PNG."""
+    """Рисует кроп с осью длины и поперечными сечениями, пишет PNG."""
     u = metrics.unit
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.imshow(mask, cmap="gray")
+    mask = _crop_to_mask(crop)
+    ys, xs = np.where(mask)
+    y0, y1 = int(ys.min()), int(ys.max())
+    x_mid = (int(xs.min()) + int(xs.max())) / 2.0
 
-    ax.plot(metrics.contour[:, 0], metrics.contour[:, 1], lw=1, label="контур")
+    fig, ax = plt.subplots(figsize=(6, 8))
+    ax.imshow(crop)
 
-    (x0, y0), (x1, y1) = metrics.length_endpoints
-    ax.plot([x0, x1], [y0, y1], lw=1, label="ось длины")
-    (x0, y0), (x1, y1) = metrics.width_endpoints
-    ax.plot([x0, x1], [y0, y1], lw=1, label="ось ширины")
+    ax.plot([x_mid, x_mid], [y0, y1], lw=1.5, color="cyan", label="ось длины")
 
     for sec in metrics.widths.values():
         if sec.p0 is None or sec.p1 is None:
             continue
-        ax.plot([sec.p0[0], sec.p1[0]], [sec.p0[1], sec.p1[1]], lw=1)
-        ax.text(*sec.center, f"{sec.width:.2f} {u}",
-                fontsize=10, ha="center", va="bottom", color="red")
+        ax.plot([sec.p0[0], sec.p1[0]], [sec.p0[1], sec.p1[1]], lw=1, color="red")
+        ax.text(sec.center[0], sec.center[1] - 3, f"{sec.width:.2f} {u}",
+                fontsize=8, ha="center", va="bottom", color="red")
 
     ax.set_title(f"Длина={metrics.length:.2f} {u} | Ширина={metrics.width:.2f} {u}")
-    ax.set_xlim(0, mask.shape[1] - 1)
-    ax.set_ylim(mask.shape[0] - 1, 0)
+    ax.set_xlim(0, crop.shape[1] - 1)
+    ax.set_ylim(crop.shape[0] - 1, 0)
     ax.set_aspect("equal")
     ax.legend(loc="upper right")
     ax.axis("off")
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
     plt.close(fig)
-
-
-# вспомогательные функции
-
-
-def _measure_widths(
-    mask: np.ndarray,
-    mean: np.ndarray,
-    u: np.ndarray,
-    v: np.ndarray,
-    umin: float,
-    umax: float,
-    width_px: float,
-    fractions: Sequence[float],
-    scale: float,
-) -> dict[float, SectionWidth]:
-    """Измеряет ширину листа на каждой фракции вдоль главной оси."""
-    h, w = mask.shape[:2]
-    half_span = max(10.0, width_px / 2 + 5)
-    n_samples = int(max(50, 2 * half_span * 4))
-    ts = np.linspace(-half_span, half_span, n_samples, dtype=np.float32)
-
-    result: dict[float, SectionWidth] = {}
-
-    for frac in fractions:
-        center = mean + u * (umin + frac * (umax - umin))
-
-        coords = center[None, :] + ts[:, None] * v[None, :]
-        xi = np.rint(coords[:, 0]).astype(int)
-        yi = np.rint(coords[:, 1]).astype(int)
-
-        in_bounds = (xi >= 0) & (xi < w) & (yi >= 0) & (yi < h)
-        inside = np.zeros(n_samples, dtype=bool)
-        inside[in_bounds] = mask[yi[in_bounds], xi[in_bounds]] > 0
-
-        hits = np.where(inside)[0]
-        if hits.size == 0:
-            result[frac] = SectionWidth(0.0, None, None, _to_tuple(center))
-            continue
-
-        t0, t1 = float(ts[hits[0]]), float(ts[hits[-1]])
-        wpx = abs(t1 - t0)
-        p0 = center + v * t0
-        p1 = center + v * t1
-
-        result[frac] = SectionWidth(
-            width=wpx * scale,
-            p0=_to_tuple(p0),
-            p1=_to_tuple(p1),
-            center=_to_tuple(center),
-        )
-
-    return result
-
-
-def _to_tuple(arr: np.ndarray) -> tuple[float, float]:
-    return (float(arr[0]), float(arr[1]))
-

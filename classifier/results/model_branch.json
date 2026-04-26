@@ -1,0 +1,58 @@
+{
+  "leaf_type": "branch",
+  "n_trees": 300,
+  "max_depth": 6,
+  "lr": 0.1,
+  "val_report": {
+    "accuracy": 0.934640522875817,
+    "per_class": [
+      {
+        "class": "good_leaf",
+        "precision": 0.8983050847457628,
+        "recall": 0.9380530973451328,
+        "f1": 0.9177489177489178,
+        "support": 113
+      },
+      {
+        "class": "bad_leaf",
+        "precision": 0.9513888888888888,
+        "recall": 0.9133333333333333,
+        "f1": 0.9319727891156462,
+        "support": 300
+      },
+      {
+        "class": "non_leaf",
+        "precision": 0.9320388349514563,
+        "recall": 0.964824120603015,
+        "f1": 0.9481481481481482,
+        "support": 199
+      }
+    ]
+  },
+  "test_report": {
+    "accuracy": 0.9444444444444444,
+    "per_class": [
+      {
+        "class": "good_leaf",
+        "precision": 0.9459459459459459,
+        "recall": 0.9292035398230089,
+        "f1": 0.9375,
+        "support": 113
+      },
+      {
+        "class": "bad_leaf",
+        "precision": 0.9493243243243243,
+        "recall": 0.9366666666666666,
+        "f1": 0.9429530201342282,
+        "support": 300
+      },
+      {
+        "class": "non_leaf",
+        "precision": 0.9365853658536586,
+        "recall": 0.964824120603015,
+        "f1": 0.9504950495049505,
+        "support": 199
+      }
+    ]
+  }
+}

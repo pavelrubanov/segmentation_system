@@ -1,0 +1,58 @@
+{
+  "leaf_type": "girgensohnii",
+  "n_trees": 300,
+  "max_depth": 6,
+  "lr": 0.1,
+  "val_report": {
+    "accuracy": 0.9251336898395722,
+    "per_class": [
+      {
+        "class": "good_leaf",
+        "precision": 0.8529411764705882,
+        "recall": 0.9354838709677419,
+        "f1": 0.8923076923076922,
+        "support": 62
+      },
+      {
+        "class": "bad_leaf",
+        "precision": 0.9512195121951219,
+        "recall": 0.91,
+        "f1": 0.9301533219761499,
+        "support": 300
+      },
+      {
+        "class": "non_leaf",
+        "precision": 0.912621359223301,
+        "recall": 0.9447236180904522,
+        "f1": 0.928395061728395,
+        "support": 199
+      }
+    ]
+  },
+  "test_report": {
+    "accuracy": 0.9572192513368984,
+    "per_class": [
+      {
+        "class": "good_leaf",
+        "precision": 0.9180327868852459,
+        "recall": 0.9032258064516129,
+        "f1": 0.9105691056910569,
+        "support": 62
+      },
+      {
+        "class": "bad_leaf",
+        "precision": 0.9693877551020408,
+        "recall": 0.95,
+        "f1": 0.9595959595959594,
+        "support": 300
+      },
+      {
+        "class": "non_leaf",
+        "precision": 0.9514563106796117,
+        "recall": 0.9849246231155779,
+        "f1": 0.9679012345679012,
+        "support": 199
+      }
+    ]
+  }
+}

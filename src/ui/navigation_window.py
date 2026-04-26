@@ -1,6 +1,7 @@
 from PyQt6 import QtWidgets, QtCore, QtGui
 from .segmentation.window import Window as SegmentationWindow
-from .processing_window import run_processing
+from .measure_crops import measure_crops
+from .measure_images import measure_images
 
 
 class NavigationWindow(QtWidgets.QMainWindow):
@@ -32,13 +33,21 @@ class NavigationWindow(QtWidgets.QMainWindow):
         self.segment_btn.setToolTip("Интерактивная сегментация с MobileSAM")
         self.segment_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
 
-        self.process_btn = QtWidgets.QPushButton("  Обработка масок")
+        self.process_btn = QtWidgets.QPushButton("  Замеры по готовым кропам")
         self.process_btn.setObjectName("card")
         self.process_btn.setIcon(sp(QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView))
         self.process_btn.setIconSize(QtCore.QSize(28, 28))
         self.process_btn.setMinimumHeight(64)
-        self.process_btn.setToolTip("Пакетные измерения и экспорт в CSV")
+        self.process_btn.setToolTip("Пакетные измерения по готовым кропам и экспорт в CSV/XLSX")
         self.process_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+
+        self.auto_btn = QtWidgets.QPushButton("  Авто-сегментация и замеры")
+        self.auto_btn.setObjectName("card")
+        self.auto_btn.setIcon(sp(QtWidgets.QStyle.StandardPixmap.SP_MediaPlay))
+        self.auto_btn.setIconSize(QtCore.QSize(28, 28))
+        self.auto_btn.setMinimumHeight(64)
+        self.auto_btn.setToolTip("Сегментация исходных фото, отбор классификатором, замеры, выгрузка в Excel")
+        self.auto_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
 
         self.quit_btn = QtWidgets.QPushButton("Выход")
         self.quit_btn.setObjectName("flat")
@@ -47,6 +56,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         # сигналы
         self.segment_btn.clicked.connect(self.on_segment_images)
         self.process_btn.clicked.connect(self.on_process_images)
+        self.auto_btn.clicked.connect(self.on_auto_process)
         self.quit_btn.clicked.connect(self.close)
 
         # лейаут
@@ -59,6 +69,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         layout.addSpacing(24)
         layout.addWidget(self.segment_btn)
         layout.addWidget(self.process_btn)
+        layout.addWidget(self.auto_btn)
         layout.addStretch()
         layout.addWidget(self.quit_btn, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
 
@@ -66,7 +77,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
-        self.resize(480, 360)
+        self.resize(480, 440)
 
     def on_segment_images(self):
         if self.segmentation_window is None or not self.segmentation_window.isVisible():
@@ -74,4 +85,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
             self.segmentation_window.show()
 
     def on_process_images(self):
-        run_processing(self)
+        measure_crops(self)
+
+    def on_auto_process(self):
+        measure_images(self, self.predictor)
