@@ -5,13 +5,14 @@ from pathlib import Path
 from PyQt6 import QtWidgets, QtCore, QtGui
 from classifier import find_available_leaf_types, get_classifier
 from core.image_data import ImageWithMasks
+from core.paths import resource_path
 from core.predictor import Predictor
 from .masks_buffer import MasksBuffer
 from .canvas import SegmentationCanvas
 from core.leaf_pipeline import auto_segment
 from ui.style import icon_crosshair, icon_brush, icon_eraser, icon_auto_segment
 
-_CLASSIFIER_WEIGHTS_DIR = Path(__file__).parent.parent.parent.parent / "models"
+_CLASSIFIER_WEIGHTS_DIR = resource_path("models")
 
 
 class _AutoSegWorker(QtCore.QThread):

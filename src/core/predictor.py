@@ -2,9 +2,17 @@
 препроцессинга --- его делает leaf_pipeline на этапе сохранения/измерений."""
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import torch
-from mobile_sam import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
+
+# MobileSAM импортирует timm по устаревшим путям и перерегистрирует tiny_vit_*
+# в реестре timm. Оба warning'а безвредные --- глушим только на момент импорта.
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=FutureWarning, module=r"timm\..*")
+    warnings.filterwarnings("ignore", category=UserWarning, module=r"mobile_sam\..*")
+    from mobile_sam import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
 
 
 class Predictor:

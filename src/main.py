@@ -4,9 +4,11 @@ import os
 import sys
 from pathlib import Path
 
-# чтобы можно было импортировать пакет classifier (он соседом к src/)
+# чтобы можно было импортировать пакет classifier (он соседом к src/).
+# В frozen-режиме PyInstaller сам заботится об импортах, эта вставка безвредна.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from core.paths import resource_path
 from core.predictor import Predictor
 from PyQt6 import QtWidgets
 from ui.navigation_window import NavigationWindow
@@ -17,7 +19,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--checkpoint",
-        default="../models/mobile_sam.pt",
+        default=str(resource_path("models/mobile_sam.pt")),
         help="Путь к весам MobileSAM",
     )
     args = parser.parse_args()

@@ -13,8 +13,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
-import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 
 
 @dataclass
@@ -115,7 +116,9 @@ def save_measurement_visualization(
     y0, y1 = int(ys.min()), int(ys.max())
     x_mid = (int(xs.min()) + int(xs.max())) / 2.0
 
-    fig, ax = plt.subplots(figsize=(6, 8))
+    fig = Figure(figsize=(6, 8))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot(111)
     ax.imshow(crop)
 
     ax.plot([x_mid, x_mid], [y0, y1], lw=1.5, color="cyan", label="ось длины")
@@ -135,4 +138,3 @@ def save_measurement_visualization(
     ax.axis("off")
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
-    plt.close(fig)

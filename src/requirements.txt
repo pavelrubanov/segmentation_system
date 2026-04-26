@@ -3,7 +3,7 @@ PyQt6==6.10.2
 Pillow==12.1.0
 numpy==2.2.6
 timm==1.0.24
-opencv-python==4.11.0.86
+opencv-python-headless==4.11.0.86
 matplotlib==3.10.3
 openpyxl==3.1.5
 scikit-learn==1.6.1

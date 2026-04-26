@@ -7,6 +7,7 @@ from PyQt6 import QtWidgets
 
 from classifier import find_available_leaf_types, get_classifier
 from core.file_naming import image_file_filter
+from core.paths import resource_path
 from core.predictor import Predictor
 from core.sources import AutoSegmentSource
 
@@ -19,7 +20,7 @@ from .runner import (
     run_with_progress,
 )
 
-_CLASSIFIER_WEIGHTS_DIR = Path(__file__).parent.parent.parent / "models"
+_CLASSIFIER_WEIGHTS_DIR = resource_path("models")
 
 
 class ImagesSettingsDialog(SettingsDialog):
