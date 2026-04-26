@@ -16,11 +16,11 @@ MobileNet достаёт общие визуальные признаки; XGBoo
 
 ```
 classifier/
-├── __init__.py       # re-export LeafClassifier, find_available_leaf_types
-├── pipeline.py       # preprocess + PCA + VARIANTS (детерм. аугментация)
+├── __init__.py       # re-export LeafClassifier, find_available_leaf_types, get_classifier
+├── variants.py       # 6 детерм. аугментаций (hflip × {neutral, brighter, darker})
 ├── mobilenet.py      # MobileNetV3 feature extractor + сборка features.npz
 ├── train.py          # обучение XGBoost на features.npz
-├── predict.py        # LeafClassifier для inference в приложении
+├── predict.py        # LeafClassifier + get_classifier (синглтон по weights_path)
 ├── features.npz      # собранные признаки (создаётся один раз)
 └── results/          # JSON-отчёты обучения (per-class метрики, CV-фолды)
 
@@ -28,6 +28,11 @@ models/               # рядом с classifier/ (не внутри)
 ├── mobile_sam.pt     # веса сегментатора (уже лежит)
 └── model_<type>.pkl  # обученные XGBoost (создаётся train.py)
 ```
+
+Пакет намеренно держится **независимым** от `src/core/`: свой venv (`classifier/.venv/`),
+не импортирует из основного приложения. Если константа должна совпадать с приложением
+(например, `_CROP_INFIX = "leaf_crop"` из `core/file_naming.py`) --- она дублируется
+в `mobilenet.py` с пометкой.
 
 ## Полный workflow
 
@@ -114,15 +119,16 @@ python -m classifier.train --leaf-type capillifolium --cv 5
 ### 4. Использование в приложении
 
 ```python
-from classifier import LeafClassifier, find_available_leaf_types
+from classifier import find_available_leaf_types, get_classifier
 from core.leaf_pipeline import transform_leaf
 
 # 1. Найти доступные модели
 types = find_available_leaf_types("models")
 # [('branch', 'models/model_branch.pkl'), ...]
 
-# 2. Загрузить один раз при старте приложения
-clf = LeafClassifier("models/model_capillifolium.pkl")
+# 2. Достать классификатор (синглтон по resolved-пути ---
+#    повторные вызовы вернут тот же экземпляр).
+clf = get_classifier("models/model_capillifolium.pkl")
 
 # 3. Препроцессинг (тот же, что при обучении)
 masked = image.copy()                  # RGB H×W×3
@@ -139,7 +145,12 @@ results = clf.classify_batch([crop1, crop2, crop3])
 ```
 
 **Важно:** `clf.classify(crop)` ожидает **препроцессированный** кроп из
-`transform_leaf`. Если подать сырую картинку — качество деградирует.
+`transform_leaf`. Если подать сырую картинку --- качество деградирует.
+
+`get_classifier(path)` кэширует загруженные модели в module-level словаре по
+resolved-пути --- в одной сессии один и тот же `.pkl` распаковывается ровно один
+раз. Прямой `LeafClassifier(path)` всё ещё доступен, если по какой-то причине
+кэш нежелателен.
 
 ---
 
