@@ -18,6 +18,8 @@ data/*/*
 build/
 develop-eggs/
 dist/
+packaging/work-*/
+packaging/.venv-*/
 downloads/
 eggs/
 .eggs/
@@ -38,6 +40,7 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+!packaging/sphagnum.spec
 
 # Installer logs
 pip-log.txt
