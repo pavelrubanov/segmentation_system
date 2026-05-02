@@ -1,7 +1,6 @@
 """Авто-сегментация и замеры: на вход исходные фото, на выход --- метрики
 по найденным хорошим листьям + сохранённые crops/masks/vis + CSV/XLSX."""
 from dataclasses import asdict
-from pathlib import Path
 
 from PyQt6 import QtWidgets
 

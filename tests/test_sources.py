@@ -2,7 +2,6 @@
 from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
 from PIL import Image
 
 from core import sources as sources_mod

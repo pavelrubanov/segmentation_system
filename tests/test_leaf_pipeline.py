@@ -2,7 +2,6 @@
 from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
 
 from core.leaf_pipeline import (
     auto_segment,

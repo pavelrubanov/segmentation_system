@@ -17,7 +17,6 @@ import argparse
 import json
 import pickle
 import time
-from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -273,7 +272,7 @@ def _run_cv(args, db: FeaturesDB, samples, labels):
               f"{np.mean(f1s):.3f}+/-{np.std(f1s):.3f}")
 
     cm_sum = np.sum([np.array(r["cm"]) for r in fold_results], axis=0)
-    print(f"\n  Суммарная матрица:")
+    print("\n  Суммарная матрица:")
     print("  " + f"{'':>12s}" + "".join(f"{c:>12s}" for c in CLASSES))
     for i, cls in enumerate(CLASSES):
         print("  " + f"{cls:>12s}" + "".join(f"{cm_sum[i, j]:>12d}" for j in range(len(CLASSES))))

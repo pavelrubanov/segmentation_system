@@ -1,4 +1,4 @@
-from PyQt6 import QtWidgets, QtCore, QtGui
+from PyQt6 import QtWidgets, QtCore
 from .segmentation.window import Window as SegmentationWindow
 from .measure_crops import measure_crops
 from .measure_images import measure_images

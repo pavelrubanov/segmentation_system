@@ -2,7 +2,6 @@
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from core.leaf_measure import build_fractions
 from core.measurement_pipeline import (
@@ -137,7 +136,7 @@ class TestRunPipeline:
             yield CropItem(name=Path(path).stem, crop=_crop())
 
         files = ["x.png"]
-        result = run_pipeline(files, source, _settings(tmp_path, files=files, fmt="xlsx"))
+        run_pipeline(files, source, _settings(tmp_path, files=files, fmt="xlsx"))
         assert (tmp_path / "measurements.xlsx").exists()
         assert not (tmp_path / "measurements.csv").exists()
 
