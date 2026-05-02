@@ -10,6 +10,10 @@ src/output
 data/*/*
 !data/*/.gitkeep
 
+# Биолог-фикстуры (4K-снимки и маски) --- лежат локально, в репо только README.
+tests/fixtures/biologist/*
+!tests/fixtures/biologist/README.md
+
 # C extensions
 *.so
 

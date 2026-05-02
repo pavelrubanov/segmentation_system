@@ -11,11 +11,13 @@ import pytest
 
 _mock_sam_instance = MagicMock()
 _mock_predictor_cls = MagicMock()
+_mock_amg_cls = MagicMock()
 _mock_registry = {"vit_t": MagicMock(return_value=_mock_sam_instance)}
 
 _mock_mobile_sam = types.ModuleType("mobile_sam")
 _mock_mobile_sam.sam_model_registry = _mock_registry
 _mock_mobile_sam.SamPredictor = _mock_predictor_cls
+_mock_mobile_sam.SamAutomaticMaskGenerator = _mock_amg_cls
 sys.modules.setdefault("mobile_sam", _mock_mobile_sam)
 
 from core.predictor import Predictor  # noqa: E402  (импорт после патча)
@@ -163,3 +165,63 @@ class TestPredictWithPrompts:
         predictor.predict(pos_points=[(25, 25)], neg_points=[], box=None)
         kwargs = predictor.sam_predictor.predict.call_args.kwargs
         assert kwargs["multimask_output"] is True
+
+
+# ── predict_all (AMG): фильтр по площади ──────────────────────────────────────
+
+
+def _ann(area: int, h: int, w: int) -> dict:
+    """Один annotation от SamAutomaticMaskGenerator: {segmentation, area}."""
+    seg = np.zeros((h, w), dtype=bool)
+    # Залить первые area пикселей (форма не важна, важна сумма)
+    flat = seg.reshape(-1)
+    flat[:area] = True
+    return {"segmentation": seg, "area": int(seg.sum())}
+
+
+class TestPredictAll:
+
+    def _patch_amg(self, predictor, anns):
+        predictor._mask_gen.generate = MagicMock(return_value=anns)
+
+    def test_returns_uint8_binary(self, predictor):
+        h, w = 100, 100
+        anns = [_ann(2000, h, w)]
+        self._patch_amg(predictor, anns)
+        out = predictor.predict_all(np.zeros((h, w, 3), dtype=np.uint8))
+        assert len(out) == 1
+        assert out[0].dtype == np.uint8
+        assert set(np.unique(out[0])).issubset({0, 255})
+
+    def test_filters_too_small(self, predictor):
+        h, w = 100, 100
+        # min_area_frac=0.001 → 10 px минимум
+        small = _ann(5, h, w)
+        big = _ann(2000, h, w)
+        self._patch_amg(predictor, [small, big])
+        out = predictor.predict_all(np.zeros((h, w, 3), dtype=np.uint8))
+        assert len(out) == 1   # маленькая отсеяна
+
+    def test_filters_too_big(self, predictor):
+        h, w = 100, 100
+        # max_area_frac=0.7 → 7000 px максимум
+        normal = _ann(2000, h, w)
+        huge = _ann(8000, h, w)
+        self._patch_amg(predictor, [normal, huge])
+        out = predictor.predict_all(np.zeros((h, w, 3), dtype=np.uint8))
+        assert len(out) == 1   # огромная отсеяна
+
+    def test_empty_annotations(self, predictor):
+        h, w = 100, 100
+        self._patch_amg(predictor, [])
+        assert predictor.predict_all(np.zeros((h, w, 3), dtype=np.uint8)) == []
+
+    def test_custom_thresholds(self, predictor):
+        h, w = 100, 100
+        # Со стандартом был бы пропуск; смягчим.
+        self._patch_amg(predictor, [_ann(5, h, w)])
+        out = predictor.predict_all(
+            np.zeros((h, w, 3), dtype=np.uint8),
+            min_area_frac=0.0001, max_area_frac=0.9,
+        )
+        assert len(out) == 1

@@ -1,325 +1,146 @@
-"""Тесты модуля core/leaf_measure.py."""
+"""Тесты API core/leaf_measure.py.
+
+Точность измерений на реальных листах --- в `test_biologist_metrics.py`.
+Здесь только проверки API и краевые случаи: пустой кроп, формирование
+fractions, имена колонок, сохранение визуализации.
+"""
 import numpy as np
 import pytest
 
 from core.leaf_measure import (
+    LeafMetrics,
     SectionWidth,
-    _to_tuple,
+    build_fractions,
+    column_names_for,
     measure_leaf,
     save_measurement_visualization,
 )
 
 
-# ── Вспомогательные функции ───────────────────────────────────────────────────
+def _white_crop(h=80, w=40):
+    """Кроп с «листом» по всему полю --- чёрного фона нет."""
+    return np.full((h, w, 3), 255, dtype=np.uint8)
 
 
-def make_rect_mask(h: int, w: int) -> np.ndarray:
-    """Прямоугольная маска (все пиксели = 255)."""
-    return np.full((h, w), 255, dtype=np.uint8)
+def _empty_crop(h=80, w=40):
+    return np.zeros((h, w, 3), dtype=np.uint8)
 
 
-def make_ellipse_mask(h: int, w: int) -> np.ndarray:
-    """Эллиптическая маска, вписанная в прямоугольник h×w."""
-    mask = np.zeros((h, w), dtype=np.uint8)
-    cy, cx = h // 2, w // 2
-    ry, rx = h // 2 - 2, w // 2 - 2
-    Y, X = np.ogrid[:h, :w]
-    mask[((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1] = 255
-    return mask
+# ── measure_leaf API ─────────────────────────────────────────────────────────
 
 
-# ── measure_leaf ──────────────────────────────────────────────────────────────
-
-
-class TestMeasureLeafBasic:
-
-    def test_empty_mask_raises(self):
-        """Пустая маска: ожидаем ValueError."""
-        mask = np.zeros((100, 100), dtype=np.uint8)
-        with pytest.raises(ValueError, match="Контур не найден"):
-            measure_leaf(mask)
-
-    def test_rectangle_length_and_width(self):
-        """Горизонтальный прямоугольник 100×20: длина=99, ширина=19."""
-        mask = make_rect_mask(h=20, w=100)
-        m = measure_leaf(mask)
-        assert abs(m.length - 99) < 0.5
-        assert abs(m.width - 19) < 0.5
-
-    def test_length_ge_width(self):
-        """Длина всегда ≥ ширины."""
-        mask = make_rect_mask(h=30, w=150)
-        m = measure_leaf(mask)
-        assert m.length >= m.width
-
-    def test_square_length_equals_width(self):
-        """Для квадрата длина ≈ ширина (симметрия PCA)."""
-        mask = make_rect_mask(h=100, w=100)
-        m = measure_leaf(mask)
-        assert abs(m.length - m.width) < 1.0
-
-    def test_small_mask_does_not_raise(self):
-        """Маленькая маска 5×15 не вызывает исключения."""
-        mask = make_rect_mask(h=5, w=15)
-        m = measure_leaf(mask)
-        assert m.length > 0
-
-    def test_default_unit_is_px(self):
-        """По умолчанию единица — px, масштаб 1."""
-        mask = make_rect_mask(h=20, w=100)
-        m = measure_leaf(mask)
-        assert m.unit == "px"
-
-
-class TestMeasureLeafScale:
-
-    def test_scale_multiplies_length(self):
-        """length = length_px × scale."""
-        mask = make_rect_mask(h=20, w=100)
-        m_px = measure_leaf(mask)
-        m_mm = measure_leaf(mask, unit="мм", scale=0.1)
-        assert abs(m_mm.length - m_px.length * 0.1) < 1e-6
-
-    def test_scale_multiplies_width(self):
-        """width = width_px × scale."""
-        mask = make_rect_mask(h=20, w=100)
-        m_px = measure_leaf(mask)
-        m_mm = measure_leaf(mask, unit="мм", scale=0.1)
-        assert abs(m_mm.width - m_px.width * 0.1) < 1e-6
-
-    def test_custom_unit_name(self):
-        """Название единицы передаётся в результат."""
-        mask = make_rect_mask(h=20, w=100)
-        m = measure_leaf(mask, unit="см", scale=0.01)
-        assert m.unit == "см"
-
-
-class TestMeasureLeafFractions:
+class TestMeasureLeafApi:
+    def test_empty_crop_raises(self):
+        with pytest.raises(ValueError, match="пуст"):
+            measure_leaf(_empty_crop())
 
     def test_default_seven_fractions(self):
-        """По умолчанию возвращаются 7 сечений."""
-        mask = make_rect_mask(h=20, w=200)
-        m = measure_leaf(mask)
-        assert len(m.widths) == 7
-
-    def test_default_fractions_keys(self):
-        """Ключи widths совпадают со стандартными дробями."""
-        mask = make_rect_mask(h=20, w=200)
-        m = measure_leaf(mask)
-        expected = {0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875}
-        assert set(m.widths.keys()) == expected
+        assert len(measure_leaf(_white_crop()).widths) == 7
 
     def test_custom_fractions_keys(self):
-        """Кастомные дроби: ровно эти ключи."""
-        mask = make_rect_mask(h=20, w=200)
-        fracs = (0.25, 0.5, 0.75)
-        m = measure_leaf(mask, fractions=fracs)
-        assert set(m.widths.keys()) == set(fracs)
+        m = measure_leaf(_white_crop(), fractions=(0.25, 0.5, 0.75))
+        assert set(m.widths.keys()) == {0.25, 0.5, 0.75}
 
-    def test_single_fraction(self):
-        """Одна дробь — один элемент в widths."""
-        mask = make_rect_mask(h=20, w=200)
-        m = measure_leaf(mask, fractions=(0.5,))
-        assert len(m.widths) == 1
-        assert 0.5 in m.widths
+    def test_default_unit_is_px(self):
+        assert measure_leaf(_white_crop()).unit == "px"
 
+    def test_custom_unit_passed_through(self):
+        assert measure_leaf(_white_crop(), unit="мм", scale=0.1).unit == "мм"
 
-class TestMeasureLeafSections:
+    def test_scale_multiplies_length_and_width(self):
+        m_px = measure_leaf(_white_crop())
+        m_mm = measure_leaf(_white_crop(), unit="мм", scale=0.1)
+        assert m_mm.length == pytest.approx(m_px.length * 0.1)
+        assert m_mm.width == pytest.approx(m_px.width * 0.1)
 
-    def test_section_width_positive_for_rect(self):
-        """Ширина в каждом сечении > 0 для прямоугольника."""
-        mask = make_rect_mask(h=40, w=200)
-        m = measure_leaf(mask)
-        for sec in m.widths.values():
-            assert sec.width > 0
+    def test_section_widths_scaled(self):
+        m_px = measure_leaf(_white_crop())
+        m_mm = measure_leaf(_white_crop(), unit="мм", scale=0.1)
+        for f, sec_px in m_px.widths.items():
+            assert m_mm.widths[f].width == pytest.approx(sec_px.width * 0.1)
 
-    def test_section_width_le_total_width(self):
-        """Ширина в сечении не превышает PCA-ширину более чем на 1 пиксель
-        (погрешность дискретизации сканирующей сетки)."""
-        mask = make_rect_mask(h=40, w=200)
-        m = measure_leaf(mask)
-        for sec in m.widths.values():
-            assert sec.width <= m.width + 1.0
-
-    def test_section_p0_p1_not_none(self):
-        """p0 и p1 не None для прямоугольника."""
-        mask = make_rect_mask(h=60, w=200)
-        m = measure_leaf(mask)
-        for sec in m.widths.values():
+    def test_section_endpoints_set_for_solid_crop(self):
+        for sec in measure_leaf(_white_crop()).widths.values():
             assert sec.p0 is not None
             assert sec.p1 is not None
 
-    def test_section_width_with_scale(self):
-        """С масштабом 0.05 ширины в сечениях тоже конвертируются."""
-        mask = make_rect_mask(h=40, w=200)
-        m_px = measure_leaf(mask)
-        m_mm = measure_leaf(mask, unit="мм", scale=0.05)
-        for frac in m_px.widths:
-            sec_px = m_px.widths[frac]
-            sec_mm = m_mm.widths[frac]
-            if sec_px.p0 is not None:
-                assert abs(sec_mm.width - sec_px.width * 0.05) < 1e-5
+    def test_section_returns_zero_for_empty_row(self):
+        # Кроп с двумя горизонтальными «полосками» и пустотой ровно посередине.
+        # bbox активных пикселей: y=0..99, fraction=0.5 → row=49 → попадает
+        # в дыру → SectionWidth.p0/p1 = None, width = 0.
+        h, w = 100, 40
+        crop = np.zeros((h, w, 3), dtype=np.uint8)
+        crop[:40, :] = 255
+        crop[60:, :] = 255
 
-    def test_ellipse_midpoint_widest(self):
-        """У эллипса ширина в середине (0.5) ≥ ширины у краёв."""
-        mask = make_ellipse_mask(h=80, w=200)
-        m = measure_leaf(mask)
-        mid = m.widths[0.5].width
-        lo = m.widths[0.125].width
-        hi = m.widths[0.875].width
-        assert mid >= lo - 1.0
-        assert mid >= hi - 1.0
-
-
-class TestMeasureLeafPca:
-
-    def test_axes_orthogonal(self):
-        """Оси u и v перпендикулярны: dot ≈ 0."""
-        mask = make_rect_mask(h=30, w=150)
-        m = measure_leaf(mask)
-        dot = m.axis_u[0] * m.axis_v[0] + m.axis_u[1] * m.axis_v[1]
-        assert abs(dot) < 1e-5
-
-    def test_axes_unit_length(self):
-        """Оси u и v — единичные векторы."""
-        mask = make_rect_mask(h=30, w=150)
-        m = measure_leaf(mask)
-        norm_u = (m.axis_u[0] ** 2 + m.axis_u[1] ** 2) ** 0.5
-        norm_v = (m.axis_v[0] ** 2 + m.axis_v[1] ** 2) ** 0.5
-        assert abs(norm_u - 1.0) < 1e-5
-        assert abs(norm_v - 1.0) < 1e-5
-
-    def test_mean_xy_inside_mask(self):
-        """Центр масс находится внутри маски."""
-        h, w = 40, 120
-        mask = make_rect_mask(h=h, w=w)
-        m = measure_leaf(mask)
-        cx, cy = m.mean_xy
-        assert 0 <= cx < w
-        assert 0 <= cy < h
-
-    def test_length_endpoints_count(self):
-        """length_endpoints содержит ровно две точки."""
-        mask = make_rect_mask(h=20, w=100)
-        m = measure_leaf(mask)
-        assert len(m.length_endpoints) == 2
-        for ep in m.length_endpoints:
-            assert len(ep) == 2
-            assert isinstance(ep[0], float)
-
-    def test_width_endpoints_count(self):
-        """width_endpoints содержит ровно две точки."""
-        mask = make_rect_mask(h=20, w=100)
-        m = measure_leaf(mask)
-        assert len(m.width_endpoints) == 2
-
-
-class TestMeasureLeafContour:
-
-    def test_contour_nonempty(self):
-        """Контур непустой."""
-        mask = make_rect_mask(h=40, w=100)
-        m = measure_leaf(mask)
-        assert m.contour.shape[0] > 0
-
-    def test_contour_shape_columns(self):
-        """Контур имеет форму (N, 2)."""
-        mask = make_rect_mask(h=40, w=100)
-        m = measure_leaf(mask)
-        assert m.contour.ndim == 2
-        assert m.contour.shape[1] == 2
-
-    def test_contour_within_image_bounds(self):
-        """Точки контура находятся внутри маски."""
-        h, w = 40, 100
-        mask = make_rect_mask(h=h, w=w)
-        m = measure_leaf(mask)
-        assert np.all(m.contour[:, 0] >= 0) and np.all(m.contour[:, 0] < w)
-        assert np.all(m.contour[:, 1] >= 0) and np.all(m.contour[:, 1] < h)
-
-
-# ── _to_tuple ─────────────────────────────────────────────────────────────────
-
-
-class TestToTuple:
-
-    def test_basic_float_array(self):
-        arr = np.array([1.5, 2.5])
-        assert _to_tuple(arr) == (1.5, 2.5)
-
-    def test_returns_python_floats(self):
-        arr = np.array([3, 4], dtype=np.int32)
-        result = _to_tuple(arr)
-        assert isinstance(result[0], float)
-        assert isinstance(result[1], float)
-
-    def test_negative_values(self):
-        arr = np.array([-3.14, -2.71])
-        x, y = _to_tuple(arr)
-        assert abs(x - (-3.14)) < 1e-5
-        assert abs(y - (-2.71)) < 1e-5
-
-    def test_zero_values(self):
-        arr = np.array([0.0, 0.0])
-        assert _to_tuple(arr) == (0.0, 0.0)
-
-
-# ── SectionWidth и LeafMetrics ────────────────────────────────────────────────
-
-
-class TestSectionWidth:
-
-    def test_all_fields_set(self):
-        sec = SectionWidth(
-            width=10.0,
-            p0=(0.0, 0.0),
-            p1=(10.0, 0.0),
-            center=(5.0, 5.0),
-        )
-        assert sec.width == 10.0
-        assert sec.p0 == (0.0, 0.0)
-        assert sec.p1 == (10.0, 0.0)
-        assert sec.center == (5.0, 5.0)
-
-    def test_optional_fields_none(self):
-        sec = SectionWidth(width=0.0, p0=None, p1=None, center=(0.0, 0.0))
+        sec = measure_leaf(crop, fractions=(0.5,)).widths[0.5]
         assert sec.p0 is None
         assert sec.p1 is None
+        assert sec.width == 0.0
 
 
-# ── save_measurement_visualization ────────────────────────────────────────────
+# ── build_fractions ──────────────────────────────────────────────────────────
+
+
+class TestBuildFractions:
+    def test_n3(self):
+        assert build_fractions(3) == (0.25, 0.5, 0.75)
+
+    def test_n7_matches_default_measure_fractions(self):
+        # build_fractions(7) должен совпадать с дефолтным fractions для measure_leaf
+        assert build_fractions(7) == (1 / 8, 2 / 8, 3 / 8, 4 / 8, 5 / 8, 6 / 8, 7 / 8)
+
+    @pytest.mark.parametrize("n", [1, 3, 5, 7, 10])
+    def test_all_inside_open_unit_interval(self, n):
+        assert all(0.0 < f < 1.0 for f in build_fractions(n))
+
+    @pytest.mark.parametrize("n", [1, 5, 10])
+    def test_count_matches_n(self, n):
+        assert len(build_fractions(n)) == n
+
+
+# ── column_names_for ─────────────────────────────────────────────────────────
+
+
+class TestColumnNamesFor:
+    def test_basic(self):
+        assert column_names_for([0.5], "мм") == ["image", "length_мм", "width_мм", "width_0.500_мм"]
+
+    def test_seven_fractions(self):
+        cols = column_names_for(build_fractions(7), "px")
+        assert cols[0] == "image"
+        assert "length_px" in cols
+        assert "width_0.125_px" in cols
+        assert "width_0.875_px" in cols
+        assert len(cols) == 1 + 2 + 7   # image + length + width + 7 sections
+
+
+# ── Датаклассы ───────────────────────────────────────────────────────────────
+
+
+class TestDataclasses:
+    def test_section_width_optional_fields(self):
+        sec = SectionWidth(width=0.0, p0=None, p1=None, center=(0.0, 0.0))
+        assert sec.p0 is None and sec.p1 is None
+
+    def test_leaf_metrics_basic(self):
+        m = LeafMetrics(length=100.0, width=20.0, unit="px", widths={})
+        assert m.length == 100.0 and m.unit == "px"
+
+
+# ── save_measurement_visualization ───────────────────────────────────────────
 
 
 class TestSaveVisualization:
-
-    def test_creates_png_file(self, tmp_path):
-        """Функция создаёт файл по заданному пути."""
-        mask = make_rect_mask(h=40, w=100)
-        m = measure_leaf(mask)
+    def test_creates_nonempty_png(self, tmp_path):
+        crop = _white_crop()
         out = tmp_path / "vis.png"
-        save_measurement_visualization(mask, m, str(out))
-        assert out.exists()
-
-    def test_output_file_nonempty(self, tmp_path):
-        """Созданный файл не пустой."""
-        mask = make_rect_mask(h=40, w=100)
-        m = measure_leaf(mask)
-        out = tmp_path / "vis.png"
-        save_measurement_visualization(mask, m, str(out))
-        assert out.stat().st_size > 0
+        save_measurement_visualization(crop, measure_leaf(crop), str(out))
+        assert out.exists() and out.stat().st_size > 0
 
     def test_with_scale(self, tmp_path):
-        """Визуализация с масштабом не вызывает исключений."""
-        mask = make_rect_mask(h=40, w=100)
-        m = measure_leaf(mask, unit="мм", scale=0.05)
+        crop = _white_crop()
         out = tmp_path / "vis_mm.png"
-        save_measurement_visualization(mask, m, str(out))
-        assert out.exists()
-
-    def test_with_ellipse(self, tmp_path):
-        """Визуализация эллиптической маски не вызывает исключений."""
-        mask = make_ellipse_mask(h=80, w=200)
-        m = measure_leaf(mask)
-        out = tmp_path / "vis_ellipse.png"
-        save_measurement_visualization(mask, m, str(out))
+        m = measure_leaf(crop, unit="мм", scale=0.1)
+        save_measurement_visualization(crop, m, str(out))
         assert out.exists()
