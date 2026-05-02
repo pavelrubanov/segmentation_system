@@ -14,10 +14,12 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=UserWarning, module=r"mobile_sam\..*")
     from mobile_sam import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
 
+INFERENCE_DEVICE = "cpu"
+
 
 class Predictor:
     def __init__(self, checkpoint_path: str):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = INFERENCE_DEVICE
         mobile_sam = sam_model_registry["vit_t"](checkpoint=checkpoint_path)
         mobile_sam.to(device=self.device).eval()
 

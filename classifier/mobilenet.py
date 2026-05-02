@@ -28,6 +28,8 @@ INPUT_SIZE = 512
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
 IMAGENET_STD  = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 
+INFERENCE_DEVICE = "cpu"
+
 # Модель лениво грузится при первом использовании.
 _model: torch.nn.Module | None = None
 _device: torch.device | None = None
@@ -49,9 +51,11 @@ def _fit_to_square(crop: np.ndarray, size: int = INPUT_SIZE) -> np.ndarray:
 
 
 def _ensure_model(device: str | torch.device | None = None) -> tuple[torch.nn.Module, torch.device]:
+    """Без явного device --- грузит на INFERENCE_DEVICE (CPU). Сборка features
+    передаёт `device='cuda'` явно."""
     global _model, _device
     if _model is None:
-        device = torch.device("cpu") if device is None else torch.device(device)
+        device = torch.device(INFERENCE_DEVICE) if device is None else torch.device(device)
         m = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
         m.classifier = torch.nn.Identity()
         m = m.eval().to(device)
