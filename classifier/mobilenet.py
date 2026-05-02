@@ -51,10 +51,7 @@ def _fit_to_square(crop: np.ndarray, size: int = INPUT_SIZE) -> np.ndarray:
 def _ensure_model(device: str | torch.device | None = None) -> tuple[torch.nn.Module, torch.device]:
     global _model, _device
     if _model is None:
-        if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        else:
-            device = torch.device(device)
+        device = torch.device("cpu") if device is None else torch.device(device)
         m = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
         m.classifier = torch.nn.Identity()
         m = m.eval().to(device)
@@ -136,7 +133,8 @@ def build_features_db(
     if classes is None:
         classes = sorted(d.name for d in data_dir.iterdir() if d.is_dir())
 
-    model, device = _ensure_model()
+    train_device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, device = _ensure_model(train_device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"MobileNetV3-Small: {n_params:,} параметров (frozen)")
     print(f"Device: {device}  |  input: {INPUT_SIZE}x{INPUT_SIZE}  |  batch: {batch_size}")
