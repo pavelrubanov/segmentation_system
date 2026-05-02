@@ -27,10 +27,26 @@ _NO_PEN   = QtGui.QPen(QtCore.Qt.PenStyle.NoPen)
 _MASK_COLOR = QtGui.QColor(0, 255, 255, 128)   # cyan semi-transparent
 _CLICK_THR  = 5                                  # px, порог клик vs drag
 
-# Раскраска нескольких масок: углы по золотому сечению + три яруса
-# (S, V) для разнообразия, чтобы соседние маски не сливались.
+# Палитра для раскраски нескольких масок: углы по золотому сечению + три яруса
+# (S, V) для разнообразия, чтобы соседние маски не сливались. На одном кадре
+# больше ~30 листьев не бывает, берём палитру с запасом.
 _GOLDEN_ANGLE_DEG = 137.508
 _HSV_TIERS = [(240, 255), (140, 255), (220, 180)]
+_PALETTE_SIZE = 32
+_MASK_ALPHA = 150
+
+
+def _build_palette() -> np.ndarray:
+    palette = np.empty((_PALETTE_SIZE, 4), dtype=np.uint8)
+    for i in range(_PALETTE_SIZE):
+        hue = int(i * _GOLDEN_ANGLE_DEG) % 360
+        sat, val = _HSV_TIERS[i % 3]
+        c = QtGui.QColor.fromHsv(hue, sat, val, _MASK_ALPHA)
+        palette[i] = (c.blue(), c.green(), c.red(), c.alpha())
+    return palette
+
+
+_PALETTE_BGRA = _build_palette()
 
 
 class _Overlay(QtWidgets.QGraphicsItem):
@@ -70,45 +86,18 @@ class _Overlay(QtWidgets.QGraphicsItem):
         arr[..., 3] = on * _MASK_COLOR.alpha()
         self.update()
 
-    def fill_from_masks(
-        self,
-        masks: list[np.ndarray]
-    ):
-        """Раскрашивает несколько масок --- разные цвета берём по золотому углу
-        в HSV (3 яруса насыщенности). Поверх заливок рисуем контуры, иначе
-        перекрывающиеся маски сливаются в кашу.
-        """
+    def fill_from_masks(self, masks: list[np.ndarray]):
+        """Закрасить overlay набором масок --- каждая своим цветом из палитры.
+        После дедупликации маски практически не перекрываются, поэтому контуры
+        и сортировка по площади больше не нужны."""
         arr = self._numpy()
         arr[:] = 0
-
-        # Сначала большие, потом мелкие --- так маленькие всегда сверху
-        order = sorted(range(len(masks)), key=lambda i: masks[i].sum(), reverse=True)
-
-        colors: list[QtGui.QColor] = [QtGui.QColor()] * len(masks)
-        for i in order:
-            hue = int(i * _GOLDEN_ANGLE_DEG) % 360
-            sat, val = _HSV_TIERS[i % 3]
-            colors[i] = QtGui.QColor.fromHsv(hue, sat, val, 150)
-            on = masks[i] > 0
-            arr[on, 0] = colors[i].blue()
-            arr[on, 1] = colors[i].green()
-            arr[on, 2] = colors[i].red()
-            arr[on, 3] = colors[i].alpha()
-
-        p = QtGui.QPainter(self.qimg)
-        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, False)
         for i, mask in enumerate(masks):
-            contours, _ = cv2.findContours(
-                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            c = colors[i]
-            pen_color = QtGui.QColor.fromHsv(c.hsvHue(), c.hsvSaturation(), 200, 255)
-            p.setPen(QtGui.QPen(pen_color, 2))
-            for cnt in contours:
-                pts = QtGui.QPolygonF(
-                    [QtCore.QPointF(float(pt[0][0]), float(pt[0][1])) for pt in cnt])
-                p.drawPolygon(pts)
-        p.end()
-
+            x, y, w, h = cv2.boundingRect(mask)
+            if w == 0 or h == 0:
+                continue
+            sub = arr[y:y+h, x:x+w]
+            sub[mask[y:y+h, x:x+w] > 0] = _PALETTE_BGRA[i % _PALETTE_SIZE]
         self.update()
 
     def extract_mask(self) -> np.ndarray:

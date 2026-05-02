@@ -25,7 +25,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         # кнопки-карточки
         sp = self.style().standardIcon
 
-        self.segment_btn = QtWidgets.QPushButton("  Сегментация изображений")
+        self.segment_btn = QtWidgets.QPushButton("  Интерактивная сегментация")
         self.segment_btn.setObjectName("card")
         self.segment_btn.setIcon(sp(QtWidgets.QStyle.StandardPixmap.SP_DialogOpenButton))
         self.segment_btn.setIconSize(QtCore.QSize(28, 28))
@@ -33,7 +33,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         self.segment_btn.setToolTip("Интерактивная сегментация с MobileSAM")
         self.segment_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
 
-        self.process_btn = QtWidgets.QPushButton("  Замеры по готовым кропам")
+        self.process_btn = QtWidgets.QPushButton("  Параметрические измерения листьев")
         self.process_btn.setObjectName("card")
         self.process_btn.setIcon(sp(QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView))
         self.process_btn.setIconSize(QtCore.QSize(28, 28))
@@ -41,7 +41,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         self.process_btn.setToolTip("Пакетные измерения по готовым кропам и экспорт в CSV/XLSX")
         self.process_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
 
-        self.auto_btn = QtWidgets.QPushButton("  Авто-сегментация и замеры")
+        self.auto_btn = QtWidgets.QPushButton("  Авто-сегментация и измерения")
         self.auto_btn.setObjectName("card")
         self.auto_btn.setIcon(sp(QtWidgets.QStyle.StandardPixmap.SP_MediaPlay))
         self.auto_btn.setIconSize(QtCore.QSize(28, 28))
