@@ -49,10 +49,9 @@ jobs:
       - name: Install dependencies (CPU torch + test deps)
         run: pip install -r tests/requirements.txt
 
-      # Тесты, требующие mobile_sam (categorie 2) и реальных биолог-фикстур
-      # (categorie 1, файлов на CI нет), скипаются автоматически:
-      #   - test_biologist_metrics.py: пропустит из-за отсутствия jpg/масок
-      #   - test_biologist_segmentation.py: EXPECTED пуст → @skipif сработает
+      # Биолог-фикстуры (изображения, маски, кропы) и веса моделей
+      # (mobile_sam.pt, model_<type>.pkl) лежат в репозитории, поэтому
+      # категории 1 и 2 запускаются в CI наравне с юнит-тестами.
       - name: Run tests with coverage
         run: |
           pytest tests/ -v --tb=short \

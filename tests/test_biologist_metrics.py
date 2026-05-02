@@ -1,37 +1,36 @@
-"""Категория 1: точность метрик на ручных замерах биолога (9 листов).
+"""Категория 1: точность `measure_leaf` на канонических кропах биолога.
 
-Эталон --- длина листа и 7 поперечных ширин в пикселях, измеренные биологом
-вручную. Маски пользователь делает сам через интерактивную сегментацию
-приложения и кладёт в `fixtures/biologist/` рядом с исходными jpg.
+Вход --- готовый канонический кроп (после `transform_leaf`: PCA-поворот,
+апекс наверху, чёрный фон). На таком кропе `measure_leaf` считает длину
+и 7 поперечных ширин в пикселях, мы сверяем с ручными замерами биолога.
 
-Это НЕ тест точности сегментации (маска готовая, пришла извне), а тест
-точности измерительной части: `transform_leaf` + `measure_leaf`.
+Категория НЕ тестирует ни сегментацию, ни `transform_leaf` --- кроп
+поступает извне.
 
-Если папки fixtures/biologist/ нет или нет конкретного файла --- тест skip'нется.
+Файлы кропов лежат в `fixtures/biologist/metrics/{N}_leaf_crop_0001.png`,
+сохранены приложением (интерактивная сегментация → «Сохранить и выйти»).
+Без файла на конкретный лист тест skip'ается.
 """
 from pathlib import Path
 
-import numpy as np
 import pytest
-from PIL import Image
 
 from core.io import read_rgb
 from core.leaf_measure import build_fractions, measure_leaf
-from core.leaf_pipeline import transform_leaf
 
 
-FIXTURES = Path(__file__).parent / "fixtures" / "biologist"
-FRACTIONS = build_fractions(7)  # (1/8, 2/8, ..., 7/8)
+FIXTURES = Path(__file__).parent / "fixtures" / "biologist" / "metrics"
+FRACTIONS = build_fractions(7)   # (1/8, 2/8, ..., 7/8)
 
 REL_TOL_LENGTH = 0.03
 REL_TOL_WIDTH = 0.05
 ABS_TOL_PX = 15.0
 
 
-# Эталон от биолога. Длина и 7 поперечных ширин в пикселях.
+# Эталон от биолога: длина и 7 поперечных ширин в пикселях.
 # `widths_base_to_apex` --- слева направо: основание листа → апекс.
-# В нашем pca_crop апекс наверху (fraction=0.125 ≈ апекс), поэтому при
-# сравнении биологический список реверсится.
+# В каноническом кропе апекс наверху (fraction=0.125 ≈ апекс), поэтому
+# при сравнении биологический список реверсится.
 EXPECTED: dict[int, dict] = {
     1: {"length": 1106.20, "widths_base_to_apex": (119.94, 230.59, 348.86, 459.95, 512.64, 516.11, 474.64)},
     2: {"length":  703.21, "widths_base_to_apex": (469.05, 533.11, 525.14, 530.16, 540.13, 556.40, 564.26)},
@@ -51,33 +50,26 @@ def _close(got: float, expected: float, rel_tol: float) -> bool:
 
 @pytest.fixture(scope="module", params=list(EXPECTED))
 def measured(request):
-    """Измерить один лист и закэшировать результат на модуль."""
-    img_id = request.param
-    img_path = FIXTURES / f"{img_id}.jpg"
-    mask_path = FIXTURES / f"{img_id}_mask_0001.png"
-    if not img_path.exists() or not mask_path.exists():
-        pytest.skip(f"нет файла: {img_path.name} или {mask_path.name}")
-
-    image = read_rgb(img_path)
-    mask = np.array(Image.open(mask_path).convert("L"))
-    img_masked = image.copy()
-    img_masked[mask == 0] = 0
-    crop = transform_leaf(img_masked)
-    return img_id, measure_leaf(crop, fractions=FRACTIONS)
+    leaf_id = request.param
+    crop_path = FIXTURES / f"{leaf_id}_leaf_crop_0001.png"
+    if not crop_path.exists():
+        pytest.skip(f"нет канонического кропа: {crop_path.name}")
+    crop = read_rgb(crop_path)
+    return leaf_id, measure_leaf(crop, fractions=FRACTIONS)
 
 
 def test_length_matches_biologist(measured):
-    img_id, metrics = measured
-    expected = EXPECTED[img_id]["length"]
+    leaf_id, metrics = measured
+    expected = EXPECTED[leaf_id]["length"]
     assert _close(metrics.length, expected, REL_TOL_LENGTH), (
-        f"img {img_id}: длина got={metrics.length:.1f} "
+        f"лист {leaf_id}: длина got={metrics.length:.1f} "
         f"expected={expected:.1f} diff={abs(metrics.length - expected):.1f} px"
     )
 
 
 def test_widths_match_biologist(measured):
-    img_id, metrics = measured
-    biologist = EXPECTED[img_id]["widths_base_to_apex"]
+    leaf_id, metrics = measured
+    biologist = EXPECTED[leaf_id]["widths_base_to_apex"]
     apex_to_base = list(reversed(biologist))   # → порядок системных fractions
 
     failures = []
@@ -88,4 +80,4 @@ def test_widths_match_biologist(measured):
                 f"  @{frac:.3f}: got={got:.1f} expected={exp_w:.1f} "
                 f"diff={abs(got - exp_w):.1f} px"
             )
-    assert not failures, f"img {img_id}:\n" + "\n".join(failures)
+    assert not failures, f"лист {leaf_id}:\n" + "\n".join(failures)

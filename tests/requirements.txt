@@ -1,11 +1,15 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.10.0+cpu
 torchvision==0.25.0+cpu
+git+https://github.com/ChaoningZhang/MobileSAM.git
+timm==1.0.24
 numpy
 matplotlib
 opencv-python-headless>=4
 Pillow
 openpyxl
 joblib
+xgboost
+scikit-learn
 pytest>=7
 pytest-cov

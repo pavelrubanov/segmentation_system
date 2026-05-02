@@ -1,123 +1,169 @@
-"""Категория 2: регрессионные тесты `auto_segment` на фиксированных снимках.
+"""Категория 2: точность связки auto_segment + classifier на ручной разметке.
 
-Это НЕ accuracy test --- ground truth от биолога на маски нет, эталон
-сгенерирован самим текущим алгоритмом и закомпилирован в EXPECTED как
-константа. Тест ловит **регрессии**: если рефакторинг в auto_segment / SAM /
-dedupe / pca_crop сломает результат, площади и центры найденных масок
-разъедутся с эталоном.
+Эталон --- бинарные PNG-маски ВСЕХ листьев на снимке, размеченные вручную
+через интерактивную сегментацию приложения. Имена по конвенции системы:
+``N_mask_0001.png``, ``N_mask_0002.png``, ... (любое количество).
 
-Сравнение --- по площади (rel ±2%) и центру масс (abs ±5 px) для каждой маски.
-Маски сопоставляются по близости площади (greedy), порядок в списке EXPECTED
-не имеет значения. Дополнительно требуется совпадение количества масок.
+Тест прогоняет полную цепочку, которой пользуется приложение в режиме
+``measure_images``: ``auto_segment`` (SAM AMG → dedupe → pca_crop) +
+классификатор (отбор ``good_leaf``). Результирующие маски сравниваются
+с эталоном по IoU:
 
-Если эталон пустой (`EXPECTED == {}`) или нет файла на диске --- skip. Чтобы
-сгенерировать эталон:
+* **Recall** --- каждая эталонная маска должна быть найдена среди
+  ``good_leaf`` с IoU ≥ ``IOU_THRESHOLD``. Иначе система пропустила лист.
+* **Precision** --- каждая ``good_leaf`` маска должна соответствовать
+  какой-то эталонной с IoU ≥ ``IOU_THRESHOLD``. Иначе мусор/дубль
+  просочился сквозь классификатор.
 
-    cd segmentation_system
-    python -m tests._generate_segmentation_golden
-    # → скопировать вывод в EXPECTED ниже
+Тип классификатора задаётся через переменную окружения ``LEAF_TYPE``
+(по умолчанию ``branch``). Без файлов в ``fixtures/biologist/`` или без
+весов SAM/классификатора --- тесты skip'аются.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from core.io import read_rgb
 from core.leaf_pipeline import auto_segment
 from core.paths import resource_path
 
-# Predictor импортируем лениво в фикстуре --- import-time он тянет mobile_sam,
-# а в CI без модельных весов и без mobile_sam пакет не установлен. Так модуль
-# собирается безопасно, а сами тесты всё равно skip'аются по EXPECTED.
+FIXTURES = Path(__file__).parent / "fixtures" / "biologist" / "segmentation"
 
-FIXTURES = Path(__file__).parent / "fixtures" / "biologist"
-
-AREA_REL_TOL = 0.02      # ±2% площади
-CENTROID_ABS_TOL = 5.0   # ±5 px по каждой координате
+IOU_THRESHOLD = 0.85
+LEAF_TYPE = os.environ.get("LEAF_TYPE", "branch")
+SAM_WEIGHTS = resource_path("models/mobile_sam.pt")
+CLF_WEIGHTS = resource_path(f"models/model_{LEAF_TYPE}.pkl")
 
 
-# Эталон: для каждого изображения --- список (area_px, centroid_x, centroid_y)
-# по всем маскам, которые auto_segment выдал на момент генерации.
-# Сгенерировать → tests/_generate_segmentation_golden.py.
-EXPECTED: dict[int, list[tuple[int, float, float]]] = {
-    # 1: [(234567, 1234.5, 567.8), (198765, 2345.1, 890.2)],
-    # ...
-}
+# ── Утилиты ──────────────────────────────────────────────────────────────────
+
+
+def _list_image_ids() -> list[int]:
+    """Все N.jpg, для которых есть хотя бы одна эталонная маска."""
+    ids = []
+    for p in sorted(FIXTURES.glob("*.jpg")):
+        try:
+            n = int(p.stem)
+        except ValueError:
+            continue
+        if any(FIXTURES.glob(f"{n}_mask_*.png")):
+            ids.append(n)
+    return ids
+
+
+def _load_expected_masks(img_id: int) -> list[np.ndarray]:
+    out = []
+    for p in sorted(FIXTURES.glob(f"{img_id}_mask_*.png")):
+        out.append(np.array(Image.open(p).convert("L")) > 127)
+    return out
+
+
+def _iou(a: np.ndarray, b: np.ndarray) -> float:
+    inter = int(np.logical_and(a, b).sum())
+    union = int(np.logical_or(a, b).sum())
+    return inter / union if union > 0 else 0.0
+
+
+def _greedy_match(actual: list[np.ndarray], expected: list[np.ndarray]) -> list[tuple[int, int, float]]:
+    """Жадный матчинг 1-к-1 по убыванию IoU. Возвращает [(ai, ei, iou), ...]."""
+    candidates = [
+        (_iou(a, e), ai, ei)
+        for ai, a in enumerate(actual)
+        for ei, e in enumerate(expected)
+        if a.shape == e.shape
+    ]
+    candidates.sort(reverse=True)
+
+    used_a, used_e, matches = set(), set(), []
+    for iou, ai, ei in candidates:
+        if ai in used_a or ei in used_e:
+            continue
+        used_a.add(ai)
+        used_e.add(ei)
+        matches.append((ai, ei, iou))
+    return matches
+
+
+# ── Фикстуры (session: грузим модели один раз) ───────────────────────────────
 
 
 @pytest.fixture(scope="session")
 def predictor():
+    if not SAM_WEIGHTS.exists():
+        pytest.skip(f"нет весов SAM: {SAM_WEIGHTS}")
     from core.predictor import Predictor
-    return Predictor(str(resource_path("models/mobile_sam.pt")))
+    return Predictor(str(SAM_WEIGHTS))
 
 
-def _features(mask: np.ndarray) -> tuple[int, float, float]:
-    binary = mask > 0
-    ys, xs = np.where(binary)
-    return int(binary.sum()), float(xs.mean()), float(ys.mean())
+@pytest.fixture(scope="session")
+def classifier():
+    if not CLF_WEIGHTS.exists():
+        pytest.skip(f"нет весов классификатора: {CLF_WEIGHTS}")
+    from classifier import get_classifier
+    return get_classifier(str(CLF_WEIGHTS))
 
 
-def _match_by_area(
-    actual: list[tuple[int, float, float]],
-    expected: list[tuple[int, float, float]],
-) -> list[tuple[int, int]]:
-    """Жадный матчинг actual ↔ expected по близости площади."""
-    pairs: list[tuple[int, int]] = []
-    used: set[int] = set()
-    for ai, (a_area, _, _) in enumerate(actual):
-        best_ei, best_dist = -1, float("inf")
-        for ei, (e_area, _, _) in enumerate(expected):
-            if ei in used:
-                continue
-            dist = abs(a_area - e_area) / e_area
-            if dist < best_dist:
-                best_ei, best_dist = ei, dist
-        if best_ei >= 0:
-            used.add(best_ei)
-            pairs.append((ai, best_ei))
-    return pairs
-
-
-@pytest.fixture(scope="module", params=list(EXPECTED) if EXPECTED else [])
-def segmented(request, predictor):
+@pytest.fixture(scope="module", params=_list_image_ids() or [pytest.param(None, marks=pytest.mark.skip(reason="нет фикстур"))])
+def system_output(request, predictor, classifier):
+    """Прогон полной цепочки: auto_segment + classifier. Возвращает маски good_leaf."""
     img_id = request.param
-    img_path = FIXTURES / f"{img_id}.jpg"
-    if not img_path.exists():
-        pytest.skip(f"нет файла: {img_path.name}")
-    image = read_rgb(img_path)
+    image = read_rgb(FIXTURES / f"{img_id}.jpg")
     pairs = auto_segment(image, predictor)
-    return img_id, [_features(m) for m, _ in pairs]
+    if not pairs:
+        return img_id, [], _load_expected_masks(img_id)
+
+    crops = [c for _, c in pairs]
+    masks = [m for m, _ in pairs]
+    labels = classifier.classify_batch(crops)
+    good_masks = [
+        masks[i] > 127
+        for i, (cls, _) in enumerate(labels)
+        if cls == "good_leaf"
+    ]
+    return img_id, good_masks, _load_expected_masks(img_id)
 
 
-@pytest.mark.skipif(not EXPECTED, reason="EXPECTED пуст --- сгенерируй через _generate_segmentation_golden.py")
-def test_mask_count_stable(segmented):
-    img_id, actual = segmented
-    expected = EXPECTED[img_id]
-    assert len(actual) == len(expected), (
-        f"img {img_id}: число масок got={len(actual)} expected={len(expected)}"
+# ── Тесты ────────────────────────────────────────────────────────────────────
+
+
+def test_recall_all_expected_leaves_found(system_output):
+    """Каждый эталонный лист должен быть в good_leaf с IoU ≥ IOU_THRESHOLD."""
+    img_id, actual, expected = system_output
+    matches = _greedy_match(actual, expected)
+    best_per_expected = {ei: iou for _, ei, iou in matches}
+
+    failures = []
+    for ei in range(len(expected)):
+        iou = best_per_expected.get(ei, 0.0)
+        if iou < IOU_THRESHOLD:
+            failures.append(
+                f"  эталон #{ei + 1:02d}: лучший IoU={iou:.3f} (порог {IOU_THRESHOLD})"
+            )
+    assert not failures, (
+        f"img {img_id}: пропущено {len(failures)} из {len(expected)} эталонных листьев "
+        f"(found {len(actual)} good_leaf):\n" + "\n".join(failures)
     )
 
 
-@pytest.mark.skipif(not EXPECTED, reason="EXPECTED пуст --- сгенерируй через _generate_segmentation_golden.py")
-def test_mask_features_stable(segmented):
-    img_id, actual = segmented
-    expected = EXPECTED[img_id]
-    if len(actual) != len(expected):
-        pytest.skip("число масок разъехалось --- см. test_mask_count_stable")
+def test_precision_no_false_positives(system_output):
+    """Каждая good_leaf-маска должна соответствовать эталонной с IoU ≥ IOU_THRESHOLD."""
+    img_id, actual, expected = system_output
+    matches = _greedy_match(actual, expected)
+    best_per_actual = {ai: iou for ai, _, iou in matches}
 
     failures = []
-    for ai, ei in _match_by_area(actual, expected):
-        a_area, a_cx, a_cy = actual[ai]
-        e_area, e_cx, e_cy = expected[ei]
-        rel_area = abs(a_area - e_area) / e_area
-        cx_diff = abs(a_cx - e_cx)
-        cy_diff = abs(a_cy - e_cy)
-        if rel_area > AREA_REL_TOL or cx_diff > CENTROID_ABS_TOL or cy_diff > CENTROID_ABS_TOL:
+    for ai in range(len(actual)):
+        iou = best_per_actual.get(ai, 0.0)
+        if iou < IOU_THRESHOLD:
             failures.append(
-                f"  {ai}↔{ei}: area={a_area} vs {e_area} ({rel_area:.2%}); "
-                f"centroid=({a_cx:.1f},{a_cy:.1f}) vs ({e_cx:.1f},{e_cy:.1f}) "
-                f"Δ=({cx_diff:.1f},{cy_diff:.1f})"
+                f"  good_leaf #{ai + 1:02d}: лучший IoU с эталонами={iou:.3f}"
             )
-    assert not failures, f"img {img_id}:\n" + "\n".join(failures)
+    assert not failures, (
+        f"img {img_id}: {len(failures)} из {len(actual)} good_leaf не совпали "
+        f"ни с одной эталонной маской (expected {len(expected)}):\n" + "\n".join(failures)
+    )
