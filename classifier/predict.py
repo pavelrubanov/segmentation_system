@@ -12,16 +12,12 @@ XGBoost predict_proba, argmax по вероятностям.
 """
 from __future__ import annotations
 
-import os
 import pickle
-import re
 from pathlib import Path
 
 import numpy as np
 
 from . import mobilenet
-
-_MODEL_RE = re.compile(r"^model_(?P<type>.+)\.pkl$")
 
 # Кэш классификаторов по абсолютному пути к pkl: загрузка XGBoost тяжёлая,
 # а в одной сессии один и тот же weights_path запрашивается многократно
@@ -32,23 +28,21 @@ _classifier_cache: dict[str, "LeafClassifier"] = {}
 def get_classifier(weights_path: str | Path) -> "LeafClassifier":
     """Вернуть классификатор по пути к pkl. Загружается один раз за сессию."""
     key = str(Path(weights_path).resolve())
-    cached = _classifier_cache.get(key)
-    if cached is None:
+    if (cached := _classifier_cache.get(key)) is None:
         cached = LeafClassifier(key)
         _classifier_cache[key] = cached
     return cached
 
 
 def find_available_leaf_types(weights_dir: str | Path) -> list[tuple[str, str]]:
-    """Найти все файлы вида `model_<type>.pkl` в папке. Возвращает [(type, path), ...]."""
+    """Все файлы вида `model_<type>.pkl` в папке. Возвращает [(type, path), ...]."""
     d = Path(weights_dir)
     if not d.is_dir():
         return []
-    return [
-        (m.group("type"), str(d / name))
-        for name in sorted(os.listdir(d))
-        if (m := _MODEL_RE.match(name))
-    ]
+    return sorted(
+        (p.stem.removeprefix("model_"), str(p))
+        for p in d.glob("model_*.pkl")
+    )
 
 
 class LeafClassifier:
@@ -59,7 +53,7 @@ class LeafClassifier:
             blob = pickle.load(f)
         self.model = blob["model"]
         self.classes: list[str] = list(blob["classes"])
-        self.leaf_type: str = blob.get("leaf_type", "?")
+        self.leaf_type: str = blob["leaf_type"]
 
     def classify(self, crop: np.ndarray) -> tuple[str, float]:
         """Классифицировать один кроп. Возвращает (class_name, confidence)."""
@@ -69,7 +63,6 @@ class LeafClassifier:
         """Классифицировать батч кропов. Возвращает [(class_name, confidence), ...]."""
         if not crops:
             return []
-        feats = mobilenet.encode(crops)
-        probs = self.model.predict_proba(feats)
+        probs = self.model.predict_proba(mobilenet.encode(crops))
         idxs = probs.argmax(axis=1)
         return [(self.classes[i], float(probs[b, i])) for b, i in enumerate(idxs)]

@@ -6,38 +6,43 @@ RGB-кропу --- никаких поворотов или PCA здесь не�
 """
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import numpy as np
 import torchvision.transforms.functional as TF
 from PIL import Image
 
 
-# Variant = (hflip, brightness, contrast, saturation).
-Variant = tuple[bool, float, float, float]
+class Variant(NamedTuple):
+    hflip: bool
+    brightness: float
+    contrast: float
+    saturation: float
 
-IDENTITY_VARIANT: Variant = (False, 1.0, 1.0, 1.0)
+
+IDENTITY_VARIANT = Variant(False, 1.0, 1.0, 1.0)
 
 VARIANTS: list[Variant] = [
-    (False, 1.0,  1.0,  1.0),   # orig, нейтральный
-    (False, 1.2,  1.15, 0.9),   # orig, ярче
-    (False, 0.8,  0.85, 1.1),   # orig, темнее
-    (True,  1.0,  1.0,  1.0),   # hflip, нейтральный
-    (True,  1.2,  1.15, 0.9),   # hflip, ярче
-    (True,  0.8,  0.85, 1.1),   # hflip, темнее
+    Variant(False, 1.0, 1.0,  1.0),   # orig, нейтральный
+    Variant(False, 1.2, 1.15, 0.9),   # orig, ярче
+    Variant(False, 0.8, 0.85, 1.1),   # orig, темнее
+    Variant(True,  1.0, 1.0,  1.0),   # hflip, нейтральный
+    Variant(True,  1.2, 1.15, 0.9),   # hflip, ярче
+    Variant(True,  0.8, 0.85, 1.1),   # hflip, темнее
 ]
 
 
-def apply_variant(img: np.ndarray, variant: Variant) -> np.ndarray:
+def apply_variant(img: np.ndarray, v: Variant) -> np.ndarray:
     """hflip + brightness/contrast/saturation на RGB."""
-    hflip, br, co, sa = variant
-    if not hflip and br == 1.0 and co == 1.0 and sa == 1.0:
+    if v == IDENTITY_VARIANT:
         return img
     pil = Image.fromarray(img)
-    if hflip:
+    if v.hflip:
         pil = TF.hflip(pil)
-    if br != 1.0:
-        pil = TF.adjust_brightness(pil, br)
-    if co != 1.0:
-        pil = TF.adjust_contrast(pil, co)
-    if sa != 1.0:
-        pil = TF.adjust_saturation(pil, sa)
+    if v.brightness != 1.0:
+        pil = TF.adjust_brightness(pil, v.brightness)
+    if v.contrast != 1.0:
+        pil = TF.adjust_contrast(pil, v.contrast)
+    if v.saturation != 1.0:
+        pil = TF.adjust_saturation(pil, v.saturation)
     return np.array(pil)

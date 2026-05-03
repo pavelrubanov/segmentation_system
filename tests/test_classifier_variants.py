@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from classifier.variants import IDENTITY_VARIANT, VARIANTS, apply_variant
+from classifier.variants import IDENTITY_VARIANT, VARIANTS, Variant, apply_variant
 
 
 @pytest.fixture
@@ -24,8 +24,7 @@ class TestVariantsList:
         assert VARIANTS[0] == IDENTITY_VARIANT
 
     def test_three_orig_three_hflip(self):
-        n_hflip = sum(1 for hflip, *_ in VARIANTS if hflip)
-        assert n_hflip == 3
+        assert sum(v.hflip for v in VARIANTS) == 3
 
 
 class TestApplyVariant:
@@ -34,14 +33,14 @@ class TestApplyVariant:
         assert apply_variant(img, IDENTITY_VARIANT) is img
 
     def test_hflip_only(self, img):
-        out = apply_variant(img, (True, 1.0, 1.0, 1.0))
+        out = apply_variant(img, Variant(True, 1.0, 1.0, 1.0))
         np.testing.assert_array_equal(out, img[:, ::-1, :])
 
     def test_brightness_up_increases_mean(self, img):
-        assert apply_variant(img, (False, 1.5, 1.0, 1.0)).mean() > img.mean()
+        assert apply_variant(img, Variant(False, 1.5, 1.0, 1.0)).mean() > img.mean()
 
     def test_brightness_down_decreases_mean(self, img):
-        assert apply_variant(img, (False, 0.5, 1.0, 1.0)).mean() < img.mean()
+        assert apply_variant(img, Variant(False, 0.5, 1.0, 1.0)).mean() < img.mean()
 
     def test_shape_and_dtype_preserved_for_all(self, img):
         for v in VARIANTS:

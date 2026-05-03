@@ -6,12 +6,13 @@
 Внутри: letterbox до 512×512, ImageNet-нормализация, прогон через
 MobileNetV3-Small (frozen), на выходе --- 576-мерный вектор.
 
-Модуль и для inference, и для одноразовой сборки features.npz для обучения.
+Модуль и для inference (CPU singleton, без device-параметра), и для
+одноразовой сборки features.npz для обучения (build_features_db явно
+поднимает CUDA через _ensure_model перед прогоном).
 """
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 from pathlib import Path
 
@@ -22,37 +23,28 @@ import torchvision.models as models
 from joblib import Parallel, delayed
 from PIL import Image
 
-from .variants import VARIANTS, apply_variant
+from .variants import VARIANTS, Variant, apply_variant
 
 INPUT_SIZE = 512
+FEATURE_DIM = 576
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
 IMAGENET_STD  = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 
 INFERENCE_DEVICE = "cpu"
+
+# Дубликат CROP_INFIX из src/core/file_naming.py. Пакет classifier намеренно
+# держится независимым (свой venv, не импортирует из src/), поэтому константа
+# повторена. При изменении --- править оба места.
+_CROP_INFIX = "leaf_crop"
 
 # Модель лениво грузится при первом использовании.
 _model: torch.nn.Module | None = None
 _device: torch.device | None = None
 
 
-def _fit_to_square(crop: np.ndarray, size: int = INPUT_SIZE) -> np.ndarray:
-    """Letterbox в size×size с сохранением aspect ratio (чёрные поля)."""
-    h, w = crop.shape[:2]
-    if h == 0 or w == 0:
-        return np.zeros((size, size, 3), dtype=np.uint8)
-    scale = size / max(h, w)
-    new_h = max(1, int(round(h * scale)))
-    new_w = max(1, int(round(w * scale)))
-    resized = cv2.resize(crop, (new_w, new_h), interpolation=cv2.INTER_AREA)
-    out = np.zeros((size, size, 3), dtype=np.uint8)
-    out[(size - new_h) // 2:(size - new_h) // 2 + new_h,
-        (size - new_w) // 2:(size - new_w) // 2 + new_w] = resized
-    return out
-
-
 def _ensure_model(device: str | torch.device | None = None) -> tuple[torch.nn.Module, torch.device]:
     """Без явного device --- грузит на INFERENCE_DEVICE (CPU). Сборка features
-    передаёт `device='cuda'` явно."""
+    передаёт `device='cuda'` явно перед прогоном."""
     global _model, _device
     if _model is None:
         device = torch.device(INFERENCE_DEVICE) if device is None else torch.device(device)
@@ -65,51 +57,50 @@ def _ensure_model(device: str | torch.device | None = None) -> tuple[torch.nn.Mo
     return _model, _device
 
 
-@torch.no_grad()
-def encode(crops: list[np.ndarray], batch_size: int = 32,
-           device: str | torch.device | None = None) -> np.ndarray:
-    """Из списка препроцессированных RGB-кропов получить матрицу признаков [N, 576]."""
-    model, dev = _ensure_model(device)
-    mean = IMAGENET_MEAN.to(dev)
-    std  = IMAGENET_STD.to(dev)
-
-    n = len(crops)
-    out = np.empty((n, 576), dtype=np.float32)
-    squares = np.stack([_fit_to_square(c) for c in crops]).astype(np.uint8)
-
-    for s in range(0, n, batch_size):
-        batch_np = squares[s : s + batch_size]
-        x = torch.from_numpy(batch_np).to(dev).float() / 255.0
-        x = x.permute(0, 3, 1, 2)
-        x = (x - mean) / std
-        out[s : s + len(batch_np)] = model(x).cpu().numpy()
+def _fit_to_square(crop: np.ndarray, size: int = INPUT_SIZE) -> np.ndarray:
+    """Letterbox в size×size с сохранением aspect ratio (чёрные поля)."""
+    h, w = crop.shape[:2]
+    scale = size / max(h, w)
+    new_h, new_w = round(h * scale), round(w * scale)
+    resized = cv2.resize(crop, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    out = np.zeros((size, size, 3), dtype=np.uint8)
+    top, left = (size - new_h) // 2, (size - new_w) // 2
+    out[top:top + new_h, left:left + new_w] = resized
     return out
 
 
-def encode_one(crop: np.ndarray) -> np.ndarray:
-    """Одна картинка, получить её 576-мерный вектор признаков."""
-    return encode([crop])[0]
+@torch.no_grad()
+def _forward_squares(squares: np.ndarray, batch_size: int) -> np.ndarray:
+    """Letterbox-нутые [N, INPUT_SIZE, INPUT_SIZE, 3] uint8 → [N, FEATURE_DIM] float32.
+
+    Использует загруженную через `_ensure_model` модель (на её device).
+    """
+    model, dev = _ensure_model()
+    mean, std = IMAGENET_MEAN.to(dev), IMAGENET_STD.to(dev)
+    out = np.empty((len(squares), FEATURE_DIM), dtype=np.float32)
+    for s in range(0, len(squares), batch_size):
+        batch = torch.from_numpy(squares[s:s + batch_size]).to(dev).float() / 255.0
+        batch = (batch.permute(0, 3, 1, 2) - mean) / std
+        out[s:s + len(batch)] = model(batch).cpu().numpy()
+    return out
+
+
+def encode(crops: list[np.ndarray], batch_size: int = 32) -> np.ndarray:
+    """Из списка препроцессированных RGB-кропов получить матрицу признаков [N, FEATURE_DIM]."""
+    if not crops:
+        return np.empty((0, FEATURE_DIM), dtype=np.float32)
+    squares = np.stack([_fit_to_square(c) for c in crops])
+    return _forward_squares(squares, batch_size)
 
 
 # --- одноразовая сборка features.npz из data/ ---
 
 
-def _transform_raw_file(crop_path: str, variants: tuple) -> np.ndarray:
-    """Прочитать *_leaf_crop_*.png и сгенерировать [|variants|, 512, 512, 3].
-
-    Считаем, что crop --- уже результат `core.leaf_pipeline.transform_leaf`
-    (приложение сохраняет такие). Тут только аугментация (hflip + color jitter)
-    и letterbox до квадрата.
-    """
+def _transform_raw_file(crop_path: str, variants: tuple[Variant, ...]) -> np.ndarray:
+    """Прочитать *_leaf_crop_*.png и сгенерировать [|variants|, INPUT_SIZE, INPUT_SIZE, 3]
+    uint8. Crop --- уже результат `transform_leaf`, тут только аугментация и letterbox."""
     crop = np.array(Image.open(crop_path).convert("RGB"))
-    out = [_fit_to_square(apply_variant(crop, v)) for v in variants]
-    return np.stack(out, axis=0).astype(np.uint8)
-
-
-# Дубликат CROP_INFIX из src/core/file_naming.py. Пакет classifier намеренно
-# держится независимым (свой venv, не импортирует из src/), поэтому константа
-# повторена. При изменении --- править оба места.
-_CROP_INFIX = "leaf_crop"
+    return np.stack([_fit_to_square(apply_variant(crop, v)) for v in variants])
 
 
 def _scan_class(cls_dir: Path) -> list[Path]:
@@ -126,10 +117,10 @@ def build_features_db(
     batch_size: int = 32,
     n_jobs: int = -1,
 ) -> None:
-    """data/<class>/*_leaf_crop_*.png в features.npz (N_files × N_variants строк × 576).
+    """data/<class>/*_leaf_crop_*.png в features.npz (N_files × N_variants строк × FEATURE_DIM).
 
     Структура npz:
-        X            float32 [N*|variants|, 576]
+        X            float32 [N*|variants|, FEATURE_DIM]
         file_names   str     [N]
         class_dirs   str     [N]
         n_variants   int32   (= 6)
@@ -147,12 +138,11 @@ def build_features_db(
     all_X: list[np.ndarray] = []
     all_file_names: list[str] = []
     all_class_dirs: list[str] = []
-    variants_t = tuple(VARIANTS)
+    variants = tuple(VARIANTS)
     t0 = time.time()
 
     for cls_name in classes:
-        cls_dir = data_dir / cls_name
-        files = _scan_class(cls_dir)
+        files = _scan_class(data_dir / cls_name)
         if not files:
             print(f"  [skip] {cls_name}: 0 файлов")
             continue
@@ -161,22 +151,13 @@ def build_features_db(
         print(f"  [{cls_name}] {n} x {len(VARIANTS)} = {n * len(VARIANTS)} сэмплов")
         ts = time.time()
         squares_per_file = Parallel(n_jobs=n_jobs, verbose=5, prefer="processes")(
-            delayed(_transform_raw_file)(str(f), variants_t) for f in files
+            delayed(_transform_raw_file)(str(f), variants) for f in files
         )
-        squares = np.concatenate(squares_per_file, axis=0)  # [n*6, 512, 512, 3]
+        squares = np.concatenate(squares_per_file, axis=0)  # [n*6, INPUT_SIZE, INPUT_SIZE, 3]
         t_pre = time.time() - ts
 
         ts2 = time.time()
-        mean = IMAGENET_MEAN.to(device)
-        std  = IMAGENET_STD.to(device)
-        feats = np.empty((len(squares), 576), dtype=np.float32)
-        with torch.no_grad():
-            for s in range(0, len(squares), batch_size):
-                batch_np = squares[s : s + batch_size]
-                x = torch.from_numpy(batch_np).to(device).float() / 255.0
-                x = x.permute(0, 3, 1, 2)
-                x = (x - mean) / std
-                feats[s : s + len(batch_np)] = model(x).cpu().numpy()
+        feats = _forward_squares(squares, batch_size)
         t_inf = time.time() - ts2
 
         all_X.append(feats)
@@ -207,7 +188,6 @@ def main() -> None:
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--n-jobs", type=int, default=-1)
     args = p.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     build_features_db(args.data, args.out, args.classes, args.batch_size, args.n_jobs)
 
 
