@@ -1,7 +1,3 @@
-# PyInstaller spec для sphagnum.
-# Один спек на все варианты (cpu/cu118/cu124/cu128) --- разница только в том,
-# какой torch установлен в активном venv. Используется через build_windows.ps1.
-
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
