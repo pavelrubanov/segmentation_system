@@ -7,10 +7,10 @@ from .measure_images import measure_images
 class NavigationWindow(QtWidgets.QMainWindow):
     """Навигационное окно — экран приветствия."""
 
-    def __init__(self, predictor):
+    def __init__(self):
         super().__init__()
         self.setWindowTitle("Морфометрия листьев")
-        self.predictor = predictor
+        self.predictor = None
         self.segmentation_window = None
 
         # заголовок
@@ -18,9 +18,9 @@ class NavigationWindow(QtWidgets.QMainWindow):
         title.setObjectName("heading")
         title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
-        subtitle = QtWidgets.QLabel("Сегментация и параметрический анализ")
-        subtitle.setObjectName("subtitle")
-        subtitle.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.subtitle = QtWidgets.QLabel("Загрузка модели…")
+        self.subtitle.setObjectName("subtitle")
+        self.subtitle.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
         # кнопки-карточки
         sp = self.style().standardIcon
@@ -32,6 +32,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         self.segment_btn.setMinimumHeight(64)
         self.segment_btn.setToolTip("Интерактивная сегментация с MobileSAM")
         self.segment_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.segment_btn.setEnabled(False)
 
         self.process_btn = QtWidgets.QPushButton("  Параметрические измерения листьев")
         self.process_btn.setObjectName("card")
@@ -48,6 +49,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         self.auto_btn.setMinimumHeight(64)
         self.auto_btn.setToolTip("Сегментация исходных фото, отбор классификатором, замеры, выгрузка в Excel")
         self.auto_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.auto_btn.setEnabled(False)
 
         self.quit_btn = QtWidgets.QPushButton("Выход")
         self.quit_btn.setObjectName("flat")
@@ -65,7 +67,7 @@ class NavigationWindow(QtWidgets.QMainWindow):
         layout.setSpacing(8)
 
         layout.addWidget(title)
-        layout.addWidget(subtitle)
+        layout.addWidget(self.subtitle)
         layout.addSpacing(24)
         layout.addWidget(self.segment_btn)
         layout.addWidget(self.process_btn)
@@ -78,6 +80,12 @@ class NavigationWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(widget)
 
         self.resize(480, 440)
+
+    def set_predictor(self, predictor):
+        self.predictor = predictor
+        self.subtitle.setText("Сегментация и параметрический анализ")
+        self.segment_btn.setEnabled(True)
+        self.auto_btn.setEnabled(True)
 
     def on_segment_images(self):
         if self.segmentation_window is None or not self.segmentation_window.isVisible():
