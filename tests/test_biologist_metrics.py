@@ -28,19 +28,20 @@ ABS_TOL_PX = 15.0
 
 
 # Эталон от биолога: длина и 7 поперечных ширин в пикселях.
+# Ключ --- имя кропа без `_leaf_crop_0001.png` (любая строка).
 # `widths_base_to_apex` --- слева направо: основание листа → апекс.
 # В каноническом кропе апекс наверху (fraction=0.125 ≈ апекс), поэтому
 # при сравнении биологический список реверсится.
-EXPECTED: dict[int, dict] = {
-    1: {"length": 1106.20, "widths_base_to_apex": (119.94, 230.59, 348.86, 459.95, 512.64, 516.11, 474.64)},
-    2: {"length":  703.21, "widths_base_to_apex": (469.05, 533.11, 525.14, 530.16, 540.13, 556.40, 564.26)},
-    3: {"length": 1131.98, "widths_base_to_apex": (518.93, 602.70, 623.46, 579.88, 438.83, 293.44, 165.19)},
-    4: {"length": 1446.20, "widths_base_to_apex": (789.44, 880.91, 918.69, 924.13, 912.01, 903.78, 890.94)},
-    5: {"length": 1992.23, "widths_base_to_apex": (668.54, 797.53, 848.25, 625.51, 767.19, 429.46, 205.57)},
-    6: {"length":  766.85, "widths_base_to_apex": (217.70, 336.88, 414.27, 483.84, 520.52, 528.76, 549.57)},
-    7: {"length": 1680.43, "widths_base_to_apex": (1032.76, 992.25, 969.15, 944.05, 915.82, 818.46, 627.21)},
-    8: {"length":  829.17, "widths_base_to_apex": (261.73, 365.31, 432.05, 470.35, 514.39, 574.28, 592.15)},
-    9: {"length":  408.18, "widths_base_to_apex": (309.14, 324.10, 311.38, 285.40, 273.30, 273.18, 271.78)},
+EXPECTED: dict[str, dict] = {
+    "1": {"length": 1106.20, "widths_base_to_apex": (119.94, 230.59, 348.86, 459.95, 512.64, 516.11, 474.64)},
+    "2": {"length":  703.21, "widths_base_to_apex": (469.05, 533.11, 525.14, 530.16, 540.13, 556.40, 564.26)},
+    "3": {"length": 1131.98, "widths_base_to_apex": (518.93, 602.70, 623.46, 579.88, 438.83, 293.44, 165.19)},
+    "4": {"length": 1446.20, "widths_base_to_apex": (789.44, 880.91, 918.69, 924.13, 912.01, 903.78, 890.94)},
+    "5": {"length": 1992.23, "widths_base_to_apex": (668.54, 797.53, 848.25, 625.51, 767.19, 429.46, 205.57)},
+    "6": {"length":  766.85, "widths_base_to_apex": (217.70, 336.88, 414.27, 483.84, 520.52, 528.76, 549.57)},
+    "7": {"length": 1680.43, "widths_base_to_apex": (1032.76, 992.25, 969.15, 944.05, 915.82, 818.46, 627.21)},
+    "8": {"length":  829.17, "widths_base_to_apex": (261.73, 365.31, 432.05, 470.35, 514.39, 574.28, 592.15)},
+    "9": {"length":  408.18, "widths_base_to_apex": (309.14, 324.10, 311.38, 285.40, 273.30, 273.18, 271.78)},
 }
 
 
@@ -50,26 +51,26 @@ def _close(got: float, expected: float, rel_tol: float) -> bool:
 
 @pytest.fixture(scope="module", params=list(EXPECTED))
 def measured(request):
-    leaf_id = request.param
-    crop_path = FIXTURES / f"{leaf_id}_leaf_crop_0001.png"
+    leaf_name = request.param
+    crop_path = FIXTURES / f"{leaf_name}_leaf_crop_0001.png"
     if not crop_path.exists():
         pytest.skip(f"нет канонического кропа: {crop_path.name}")
     crop = read_rgb(crop_path)
-    return leaf_id, measure_leaf(crop, fractions=FRACTIONS)
+    return leaf_name, measure_leaf(crop, fractions=FRACTIONS)
 
 
 def test_length_matches_biologist(measured):
-    leaf_id, metrics = measured
-    expected = EXPECTED[leaf_id]["length"]
+    leaf_name, metrics = measured
+    expected = EXPECTED[leaf_name]["length"]
     assert _close(metrics.length, expected, REL_TOL_LENGTH), (
-        f"лист {leaf_id}: длина got={metrics.length:.1f} "
+        f"лист {leaf_name}: длина got={metrics.length:.1f} "
         f"expected={expected:.1f} diff={abs(metrics.length - expected):.1f} px"
     )
 
 
 def test_widths_match_biologist(measured):
-    leaf_id, metrics = measured
-    biologist = EXPECTED[leaf_id]["widths_base_to_apex"]
+    leaf_name, metrics = measured
+    biologist = EXPECTED[leaf_name]["widths_base_to_apex"]
     apex_to_base = list(reversed(biologist))   # → порядок системных fractions
 
     failures = []
@@ -80,4 +81,4 @@ def test_widths_match_biologist(measured):
                 f"  @{frac:.3f}: got={got:.1f} expected={exp_w:.1f} "
                 f"diff={abs(got - exp_w):.1f} px"
             )
-    assert not failures, f"лист {leaf_id}:\n" + "\n".join(failures)
+    assert not failures, f"лист {leaf_name}:\n" + "\n".join(failures)
