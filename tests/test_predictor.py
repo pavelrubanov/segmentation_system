@@ -1,29 +1,29 @@
-"""Тесты модуля core/predictor.py (с заглушками для MobileSAM и torch)."""
-import sys
-import types
+"""Тесты модуля core/predictor.py (с заглушками для SAM-классов).
+
+Мок применяется через monkeypatch на атрибутах уже импортированного
+``core.predictor`` --- НЕ через ``sys.modules``. Иначе мок mobile_sam
+утёк бы в интеграционные тесты, которым нужен реальный SAM.
+"""
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
-# ── Мок mobile_sam (до импорта predictor) ────────────────────────────────────
-# Создаём фиктивный модуль, чтобы не требовалась установка MobileSAM.
+import core.predictor as cp
+
 
 _mock_sam_instance = MagicMock()
 _mock_predictor_cls = MagicMock()
 _mock_amg_cls = MagicMock()
 _mock_registry = {"vit_t": MagicMock(return_value=_mock_sam_instance)}
 
-_mock_mobile_sam = types.ModuleType("mobile_sam")
-_mock_mobile_sam.sam_model_registry = _mock_registry
-_mock_mobile_sam.SamPredictor = _mock_predictor_cls
-_mock_mobile_sam.SamAutomaticMaskGenerator = _mock_amg_cls
-sys.modules.setdefault("mobile_sam", _mock_mobile_sam)
 
-from core.predictor import Predictor  # noqa: E402  (импорт после патча)
-
-
-# ── Фикстура ──────────────────────────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _patch_sam(monkeypatch):
+    """Подменяет SAM-классы внутри core.predictor на моки на время теста."""
+    monkeypatch.setattr(cp, "sam_model_registry", _mock_registry)
+    monkeypatch.setattr(cp, "SamPredictor", _mock_predictor_cls)
+    monkeypatch.setattr(cp, "SamAutomaticMaskGenerator", _mock_amg_cls)
 
 
 @pytest.fixture()
@@ -31,7 +31,7 @@ def predictor():
     """Создаёт экземпляр Predictor с моком sam, сбрасывает счётчики между тестами."""
     _mock_registry["vit_t"].reset_mock()
     _mock_predictor_cls.reset_mock()
-    return Predictor(checkpoint_path="fake_weights.pt")
+    return cp.Predictor(checkpoint_path="fake_weights.pt")
 
 
 def _fake_predict(h: int, w: int, best_idx: int = 1):
