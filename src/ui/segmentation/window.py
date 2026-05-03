@@ -5,6 +5,7 @@ from pathlib import Path
 from PyQt6 import QtWidgets, QtCore, QtGui
 from classifier import find_available_leaf_types, get_classifier
 from core.image_data import ImageWithMasks
+from core.io import make_run_dir
 from core.paths import resource_path
 from core.predictor import Predictor
 from .masks_buffer import MasksBuffer
@@ -359,13 +360,17 @@ class Window(QtWidgets.QMainWindow):
 
         try:
             self.masks_buffer.wait_for_pending()
-            dest = Path(save_dir)
+            run_dir = make_run_dir(Path(save_dir), "segment")
+            masks_dir = run_dir / "masks"
+            crops_dir = run_dir / "crops"
+            masks_dir.mkdir(exist_ok=True)
+            crops_dir.mkdir(exist_ok=True)
             for e in entries:
-                for p in e:
-                    shutil.copy2(p, dest / p.name)
+                shutil.copy2(e.mask, masks_dir / e.mask.name)
+                shutil.copy2(e.crop, crops_dir / e.crop.name)
             QtWidgets.QMessageBox.information(
                 self, "Успех",
-                f"Сохранено масок: {len(entries)} из {len(self.images_data)} изображений\nПапка: {dest}")
+                f"Сохранено масок: {len(entries)} из {len(self.images_data)} изображений\nПапка: {run_dir}")
             self.close()
         except Exception as exc:
             QtWidgets.QMessageBox.critical(

@@ -6,6 +6,7 @@ from PyQt6 import QtWidgets
 
 from classifier import find_available_leaf_types, get_classifier
 from core.file_naming import image_file_filter
+from core.io import make_run_dir
 from core.paths import resource_path
 from core.predictor import Predictor
 from core.sources import AutoSegmentSource
@@ -82,6 +83,7 @@ def measure_images(parent: QtWidgets.QWidget, predictor: Predictor) -> None:
             parent, "Ошибка", f"Не удалось загрузить классификатор: {exc}")
         return
 
+    s.out_dir = make_run_dir(s.out_dir, "auto")
     source = AutoSegmentSource(
         predictor=predictor,
         classifier=classifier,

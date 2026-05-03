@@ -2,6 +2,7 @@
 from PyQt6 import QtWidgets
 
 from core.file_naming import crop_file_filter
+from core.io import make_run_dir
 from core.sources import disk_source
 
 from .runner import (
@@ -30,6 +31,7 @@ def measure_crops(parent: QtWidgets.QWidget) -> None:
         return
 
     s = dlg.pipeline_settings()
+    s.out_dir = make_run_dir(s.out_dir, "measure")
     worker = PipelineWorker(files=s.files, source=disk_source, settings=s)
 
     def msg(result):
