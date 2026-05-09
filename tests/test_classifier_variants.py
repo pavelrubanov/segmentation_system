@@ -1,4 +1,4 @@
-"""Тесты classifier/variants.py: 6 детерминированных аугментаций."""
+"""classifier/variants.py: 6 детерминированных аугментаций."""
 import numpy as np
 import pytest
 
@@ -7,7 +7,7 @@ from classifier.variants import IDENTITY_VARIANT, VARIANTS, Variant, apply_varia
 
 @pytest.fixture
 def img():
-    """Цветной градиент 32×32×3 --- чтобы аугментации были заметны на средних."""
+    # Градиент по R/G + плоский B — чтобы аугментации сдвигали средние.
     g = np.zeros((32, 32, 3), dtype=np.uint8)
     for x in range(32):
         g[:, x, 0] = x * 8
@@ -29,7 +29,7 @@ class TestVariantsList:
 
 class TestApplyVariant:
     def test_identity_returns_input_object(self, img):
-        # Early return → тот же объект, без копии
+        # Identity-вариант должен отдать тот же объект, без копии.
         assert apply_variant(img, IDENTITY_VARIANT) is img
 
     def test_hflip_only(self, img):

@@ -1,4 +1,4 @@
-"""Тесты core/measurement_pipeline.py."""
+"""core/measurement_pipeline.py."""
 from pathlib import Path
 
 import numpy as np
@@ -14,7 +14,6 @@ from core.measurement_pipeline import (
 
 
 def _crop(h=80, w=40):
-    """Простой «лист» --- белый прямоугольник на чёрном фоне."""
     out = np.zeros((h, w, 3), dtype=np.uint8)
     out[:, :] = 255
     return out
@@ -124,7 +123,7 @@ class TestRunPipeline:
             yield CropItem(name=Path(path).stem, crop=_crop())
 
         files = ["a.png", "b.png", "c.png"]
-        # Прерываем на 2-м файле (i=1).
+        # on_progress возвращает False — после первого файла обрываем цикл.
         result = run_pipeline(
             files, source, _settings(tmp_path, files=files),
             on_progress=lambda i, n: i < 1,
@@ -142,7 +141,7 @@ class TestRunPipeline:
 
     def test_no_results_no_export_file(self, tmp_path):
         def source(path):
-            return iter([])   # источник ничего не выдаёт
+            return iter([])
 
         result = run_pipeline(["empty.png"], source, _settings(tmp_path, files=["empty.png"]))
         assert result.n_ok == 0

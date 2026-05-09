@@ -1,4 +1,4 @@
-"""Тесты core/sources.py: disk_source и AutoSegmentSource (с моками)."""
+"""core/sources.py: disk_source и AutoSegmentSource (с моками)."""
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -84,7 +84,7 @@ class TestAutoSegmentSourceCall:
         assert (tmp_path / "masks" / mask_filename("leaf123", 1)).exists()
 
     def test_indices_only_increment_for_good(self, tmp_path, monkeypatch):
-        # Должны быть имена _0001 и _0002 (только good), не _0001 и _0003.
+        # Индексы наращиваются только на good_leaf: ждём _0001 и _0002, а не _0001 и _0003.
         h, w = 30, 40
         self._patch_auto_segment(
             monkeypatch,
@@ -104,7 +104,7 @@ class TestAutoSegmentSourceCall:
     def test_empty_auto_segment_yields_nothing(self, tmp_path, monkeypatch):
         self._patch_auto_segment(monkeypatch, [])
         img_path = tmp_path / "x.png"; _save_png(img_path)
-        # Classifier даже не должен вызываться
+        # Если auto_segment ничего не нашёл, classifier дёргать не должны.
         clf = MagicMock()
         items = list(self._src(tmp_path, clf)(str(img_path)))
         assert items == []

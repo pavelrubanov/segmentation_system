@@ -1,4 +1,4 @@
-"""Тесты core/export.py: CSV/XLSX, встраивание миниатюр."""
+"""core/export.py: CSV/XLSX, встраивание миниатюр."""
 import csv
 
 import numpy as np
@@ -32,9 +32,6 @@ def rows_with_crop(vis_path):
     ]
 
 
-# ── CSV ──────────────────────────────────────────────────────────────────────
-
-
 class TestSaveCsv:
     def test_creates_file(self, tmp_path, rows):
         path = tmp_path / "out.csv"
@@ -49,9 +46,6 @@ class TestSaveCsv:
         assert len(read) == 2
         assert read[0]["image"] == "leaf01"
         assert read[1]["length_px"] == "150.10"
-
-
-# ── XLSX ─────────────────────────────────────────────────────────────────────
 
 
 class TestSaveXlsx:
@@ -72,7 +66,7 @@ class TestSaveXlsx:
         path = tmp_path / "out.xlsx"
         save_xlsx(rows, path)
         ws = openpyxl.load_workbook(path).active
-        v = ws.cell(row=2, column=2).value     # length_px
+        v = ws.cell(row=2, column=2).value
         assert isinstance(v, float)
         assert abs(v - 100.50) < 1e-6
 
@@ -94,7 +88,7 @@ class TestSaveXlsx:
         thumbs = [str(vis_path), str(vis_path)]
         save_xlsx(rows_with_crop, path, thumb_paths=thumbs)
         ws = openpyxl.load_workbook(path).active
-        # Текст в crop-колонку не пишется --- только встроенная картинка
+        # В crop-колонке только встроенная картинка, текста быть не должно.
         crop_col = list(rows_with_crop[0].keys()).index("crop") + 1
         assert ws.cell(row=2, column=crop_col).value is None
 
@@ -103,9 +97,6 @@ class TestSaveXlsx:
         save_xlsx(rows, path)
         ws = openpyxl.load_workbook(path).active
         assert ws._images == []
-
-
-# ── _thumb_size ──────────────────────────────────────────────────────────────
 
 
 class TestThumbSize:

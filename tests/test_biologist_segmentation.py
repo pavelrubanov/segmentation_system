@@ -1,30 +1,9 @@
-"""Категория 2: точность связки auto_segment + classifier на ручной разметке.
+"""Сверяем auto_segment + classifier с ручной разметкой биолога.
 
-Тестируется три типа листьев независимо --- по своей модели классификатора
-и своему набору снимков:
-
-    fixtures/biologist/segmentation/<leaf_type>/<name>.jpg
-    fixtures/biologist/segmentation/<leaf_type>/<name>_mask_0001.png
-    fixtures/biologist/segmentation/<leaf_type>/<name>_mask_0002.png
-    ...
-
-где ``<leaf_type>`` --- ``branch``, ``capillifolium`` или ``girgensohnii``,
-а маски размечают ВСЕ листья на снимке.
-
-Для каждого случая прогоняется полная цепочка ``auto_segment`` (SAM AMG +
-dedupe + pca_crop) + классификатор соответствующего типа (отбор
-``good_leaf``). Эталонные маски и финальные ``good_leaf`` сопоставляются
-1-к-1 жадно по убыванию IoU. «Хороший матч» = IoU ≥ ``IOU_THRESHOLD``.
-
-* **FN** (false negative) --- эталонная маска без хорошего матча. Лист
-  пропустила цепочка (либо SAM не нашёл, либо классификатор отверг).
-* **FP** (false positive) --- ``good_leaf``-маска без хорошего матча.
-  Артефакт/мусор просочился сквозь классификатор.
-
-Пороги (см. ``MAX_FP``, ``MAX_FN`` ниже) подобраны под текущее
-качество системы --- даём небольшой бюджет на ошибки, чтобы тесты не
-ломались от каждого нового снимка с нюансом, но при ухудшении ловим
-регрессию.
+Для трёх типов листьев (branch, capillifolium, girgensohnii) лежат снимки
+и набор масок-эталонов на каждый снимок. Прогоняем полную цепочку,
+жадно матчим по IoU, считаем FP/FN — пороги MAX_FP/MAX_FN ловят регрессию,
+но дают небольшой бюджет на пограничные случаи.
 """
 from __future__ import annotations
 
@@ -46,11 +25,8 @@ SAM_WEIGHTS = resource_path("models/mobile_sam.pt")
 IMAGE_EXTS = ("jpg", "jpeg", "png", "tif", "tiff", "bmp")
 
 IOU_THRESHOLD = 0.85
-MAX_FP = 2   # бюджет ложных срабатываний на весь набор снимков
-MAX_FN = 2   # бюджет пропусков на весь набор снимков
-
-
-# ── Утилиты ──────────────────────────────────────────────────────────────────
+MAX_FP = 2
+MAX_FN = 2
 
 
 def _list_cases() -> list[tuple[str, str]]:
@@ -77,9 +53,7 @@ def _find_image(type_dir: Path, image_name: str) -> Path | None:
 
 
 def _load_expected_masks(type_dir: Path, image_name: str) -> list[np.ndarray]:
-    """Приложение сохраняет маску как `image_np * mask` (RGB с реальными
-    цветами листа на чёрном фоне), не бинарную --- поэтому критерий
-    «пиксель листа» это `sum(каналов) > 0`, а не порог по яркости."""
+    # Эталоны сохранены приложением как image*mask (RGB, чёрный фон), не бинарные.
     return [
         np.array(Image.open(p).convert("RGB")).sum(axis=2) > 0
         for p in sorted(type_dir.glob(f"{image_name}_mask_*.png"))
@@ -111,9 +85,6 @@ def _greedy_match(actual: list[np.ndarray], expected: list[np.ndarray]) -> list[
     return matches
 
 
-# ── Фикстуры ─────────────────────────────────────────────────────────────────
-
-
 @pytest.fixture(scope="session")
 def predictor():
     if not SAM_WEIGHTS.exists():
@@ -135,8 +106,7 @@ def classifiers() -> dict[str, object]:
 
 @pytest.fixture(scope="session")
 def aggregated_results(predictor, classifiers) -> list[dict]:
-    """Прогон всей цепочки на всех кейсах. Считаем FP и FN per-case
-    с порогом IoU=IOU_THRESHOLD; матч с IoU ниже не засчитывается."""
+    """Гоняем всю цепочку на всех кейсах, считаем FP/FN на случай."""
     cases = _list_cases()
     if not cases:
         pytest.skip(f"нет фикстур в {FIXTURES}")
@@ -180,11 +150,7 @@ def aggregated_results(predictor, classifiers) -> list[dict]:
     return results
 
 
-# ── Тесты (агрегированные пороги по всему набору) ────────────────────────────
-
-
 def test_total_false_positives_within_budget(aggregated_results):
-    """Лишних good_leaf по всему набору должно быть не больше MAX_FP."""
     total_fp = sum(r["fp"] for r in aggregated_results)
     if total_fp <= MAX_FP:
         return
@@ -196,7 +162,6 @@ def test_total_false_positives_within_budget(aggregated_results):
 
 
 def test_total_false_negatives_within_budget(aggregated_results):
-    """Пропущенных эталонных листьев по всему набору должно быть не больше MAX_FN."""
     total_fn = sum(r["fn"] for r in aggregated_results)
     if total_fn <= MAX_FN:
         return

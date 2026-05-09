@@ -1,4 +1,4 @@
-"""Тесты classifier/predict.py: загрузка pkl, кэш, классификация (с моками)."""
+"""classifier/predict.py: загрузка pkl, кэш, классификация (с моками)."""
 import pickle
 from unittest.mock import patch
 
@@ -14,8 +14,7 @@ from classifier.predict import (
 
 
 class _DummyXgb:
-    """Мини-замена XGBoost для тестов: pickle-able, predict_proba возвращает
-    заранее заданные вероятности по каждой строке батча."""
+    """Pickle-able заглушка XGBoost: возвращает заранее заданные вероятности."""
 
     def __init__(self, probs: list[list[float]]) -> None:
         self._probs = np.asarray(probs, dtype=float)
@@ -24,7 +23,6 @@ class _DummyXgb:
         n = len(X)
         if self._probs.ndim == 1:
             return np.tile(self._probs, (n, 1))
-        # Если задан per-sample матрица --- берём первые n строк
         return self._probs[:n]
 
 
@@ -38,9 +36,6 @@ def clear_cache():
     _classifier_cache.clear()
     yield
     _classifier_cache.clear()
-
-
-# ── find_available_leaf_types ────────────────────────────────────────────────
 
 
 class TestFindAvailableLeafTypes:
@@ -70,9 +65,6 @@ class TestFindAvailableLeafTypes:
         assert find_available_leaf_types(tmp_path / "nope") == []
 
 
-# ── LeafClassifier ───────────────────────────────────────────────────────────
-
-
 class TestLeafClassifier:
     def test_loads_classes_and_leaf_type(self, tmp_path):
         path = tmp_path / "model_x.pkl"
@@ -89,7 +81,6 @@ class TestLeafClassifier:
     @patch("classifier.predict.mobilenet.encode")
     def test_classify_batch_returns_argmax_per_row(self, mock_encode, tmp_path):
         path = tmp_path / "model_x.pkl"
-        # Каждая строка --- разные вероятности
         _save_pkl(
             path,
             _DummyXgb([[0.1, 0.7, 0.2], [0.6, 0.3, 0.1]]),
@@ -110,9 +101,6 @@ class TestLeafClassifier:
         label, conf = LeafClassifier(path).classify(np.zeros((10, 10, 3), dtype=np.uint8))
         assert label == "good_leaf"
         assert conf == pytest.approx(0.9)
-
-
-# ── get_classifier (кэш по пути) ─────────────────────────────────────────────
 
 
 class TestGetClassifier:

@@ -1,4 +1,4 @@
-"""Тесты core/image_data.py."""
+"""core/image_data.py."""
 import numpy as np
 from PIL import Image
 
@@ -16,7 +16,7 @@ class TestImageWithMasks:
         assert ImageWithMasks(path="/tmp/x.jpg").mask_entries == []
 
     def test_mask_entries_isolated_between_instances(self):
-        # default_factory защищает от mutable-default
+        # Поле должно использовать default_factory, иначе словишь mutable-default.
         a = ImageWithMasks(path="/tmp/a.jpg")
         b = ImageWithMasks(path="/tmp/b.jpg")
         a.mask_entries.append("x")

@@ -1,4 +1,4 @@
-"""Тесты core/file_naming.py --- единая точка правды для имён артефактов."""
+"""core/file_naming.py — единая точка правды для имён артефактов."""
 import pytest
 
 from core.file_naming import (
@@ -48,7 +48,7 @@ class TestIsCropFilename:
 
     @pytest.mark.parametrize("name", ["random.jpg", "foo_crop.png", "leaf_crop.png", ""])
     def test_arbitrary_names_not_recognized(self, name):
-        # is_crop_filename ищет "_leaf_crop_" с подчёркиваниями с обеих сторон
+        # Маркер ищется с подчёркиваниями с обеих сторон — без них не считается.
         assert not is_crop_filename(name)
 
 
@@ -65,9 +65,8 @@ class TestFilters:
 
 
 class TestCrossPackageConsistency:
-    """classifier/mobilenet.py держит свою копию CROP_INFIX. Должны совпадать ---
-    иначе scanner classifier'а молча перестанет видеть кропы из приложения."""
-
+    # classifier/mobilenet.py хранит свою копию CROP_INFIX — если разъедутся,
+    # сканер классификатора перестанет видеть кропы и тихо.
     def test_classifier_crop_infix_matches_core(self):
         from classifier.mobilenet import _CROP_INFIX
         assert _CROP_INFIX == CROP_INFIX

@@ -1,8 +1,6 @@
-"""Тесты API core/leaf_measure.py.
+"""core/leaf_measure.py: API и краевые случаи.
 
-Точность измерений на реальных листах --- в `test_biologist_metrics.py`.
-Здесь только проверки API и краевые случаи: пустой кроп, формирование
-fractions, имена колонок, сохранение визуализации.
+Точность на реальных листах — в test_biologist_metrics.py.
 """
 import numpy as np
 import pytest
@@ -18,15 +16,11 @@ from core.leaf_measure import (
 
 
 def _white_crop(h=80, w=40):
-    """Кроп с «листом» по всему полю --- чёрного фона нет."""
     return np.full((h, w, 3), 255, dtype=np.uint8)
 
 
 def _empty_crop(h=80, w=40):
     return np.zeros((h, w, 3), dtype=np.uint8)
-
-
-# ── measure_leaf API ─────────────────────────────────────────────────────────
 
 
 class TestMeasureLeafApi:
@@ -65,9 +59,8 @@ class TestMeasureLeafApi:
             assert sec.p1 is not None
 
     def test_section_returns_zero_for_empty_row(self):
-        # Кроп с двумя горизонтальными «полосками» и пустотой ровно посередине.
-        # bbox активных пикселей: y=0..99, fraction=0.5 → row=49 → попадает
-        # в дыру → SectionWidth.p0/p1 = None, width = 0.
+        # Две полосы и пустая строка ровно по центру: на fraction=0.5
+        # попадаем в дыру, ширина должна выйти нулевой.
         h, w = 100, 40
         crop = np.zeros((h, w, 3), dtype=np.uint8)
         crop[:40, :] = 255
@@ -79,15 +72,11 @@ class TestMeasureLeafApi:
         assert sec.width == 0.0
 
 
-# ── build_fractions ──────────────────────────────────────────────────────────
-
-
 class TestBuildFractions:
     def test_n3(self):
         assert build_fractions(3) == (0.25, 0.5, 0.75)
 
     def test_n7_matches_default_measure_fractions(self):
-        # build_fractions(7) должен совпадать с дефолтным fractions для measure_leaf
         assert build_fractions(7) == (1 / 8, 2 / 8, 3 / 8, 4 / 8, 5 / 8, 6 / 8, 7 / 8)
 
     @pytest.mark.parametrize("n", [1, 3, 5, 7, 10])
@@ -97,9 +86,6 @@ class TestBuildFractions:
     @pytest.mark.parametrize("n", [1, 5, 10])
     def test_count_matches_n(self, n):
         assert len(build_fractions(n)) == n
-
-
-# ── column_names_for ─────────────────────────────────────────────────────────
 
 
 class TestColumnNamesFor:
@@ -112,10 +98,7 @@ class TestColumnNamesFor:
         assert "length_px" in cols
         assert "width_0.125_px" in cols
         assert "width_0.875_px" in cols
-        assert len(cols) == 1 + 2 + 7   # image + length + width + 7 sections
-
-
-# ── Датаклассы ───────────────────────────────────────────────────────────────
+        assert len(cols) == 1 + 2 + 7
 
 
 class TestDataclasses:
@@ -126,9 +109,6 @@ class TestDataclasses:
     def test_leaf_metrics_basic(self):
         m = LeafMetrics(length=100.0, width=20.0, unit="px", widths={})
         assert m.length == 100.0 and m.unit == "px"
-
-
-# ── save_measurement_visualization ───────────────────────────────────────────
 
 
 class TestSaveVisualization:

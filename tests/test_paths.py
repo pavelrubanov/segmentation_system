@@ -1,4 +1,4 @@
-"""Тесты core/paths.py: разрешение путей в dev и frozen-режиме."""
+"""core/paths.py: разрешение путей в dev и frozen-режиме."""
 import sys
 from pathlib import Path
 
@@ -7,7 +7,7 @@ from core.paths import project_root, resource_path
 
 class TestProjectRoot:
     def test_dev_mode_contains_src_dir(self):
-        # В dev-режиме project_root = родитель src/ → значит src/ внутри
+        # В dev-режиме project_root — родитель src/, поэтому src/ обязан существовать.
         assert (project_root() / "src").exists()
 
     def test_frozen_mode_uses_meipass(self, monkeypatch, tmp_path):

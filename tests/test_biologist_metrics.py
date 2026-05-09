@@ -1,15 +1,7 @@
-"""Категория 1: точность `measure_leaf` на канонических кропах биолога.
+"""Сверяем measure_leaf на канонических кропах с ручными замерами биолога.
 
-Вход --- готовый канонический кроп (после `transform_leaf`: PCA-поворот,
-апекс наверху, чёрный фон). На таком кропе `measure_leaf` считает длину
-и 7 поперечных ширин в пикселях, мы сверяем с ручными замерами биолога.
-
-Категория НЕ тестирует ни сегментацию, ни `transform_leaf` --- кроп
-поступает извне.
-
-Файлы кропов лежат в `fixtures/biologist/metrics/{N}_leaf_crop_0001.png`,
-сохранены приложением (интерактивная сегментация → «Сохранить и выйти»).
-Без файла на конкретный лист тест skip'ается.
+Кроп уже после transform_leaf (PCA, апекс наверху). Сегментацию не трогаем.
+Файлы — fixtures/biologist/metrics/{N}_leaf_crop_0001.png, без файла skip.
 """
 from pathlib import Path
 
@@ -22,7 +14,7 @@ from core.leaf_measure import build_fractions, measure_leaf
 pytestmark = pytest.mark.integration
 
 FIXTURES = Path(__file__).parent / "fixtures" / "biologist" / "metrics"
-FRACTIONS = build_fractions(7)   # (1/8, 2/8, ..., 7/8)
+FRACTIONS = build_fractions(7)
 
 REL_TOL_LENGTH = 0.15
 REL_TOL_WIDTH = 0.12
