@@ -170,5 +170,3 @@ files → source(file) → CropItem'ы → measure_one → строка эксп
 cd src
 pytest ../tests
 ```
-
-## Демонстрация
