@@ -2,7 +2,30 @@ from PyQt6 import QtWidgets, QtGui, QtCore
 
 
 def apply_theme(app: QtWidgets.QApplication) -> None:
+    app.setStyle("Fusion")
     app.setFont(QtGui.QFont("Segoe UI", 10))
+
+    pal = QtGui.QPalette()
+    pal.setColor(QtGui.QPalette.ColorRole.Window,           QtGui.QColor("#F5F6FA"))
+    pal.setColor(QtGui.QPalette.ColorRole.WindowText,       QtGui.QColor("#1E1F22"))
+    pal.setColor(QtGui.QPalette.ColorRole.Base,             QtGui.QColor("#FFFFFF"))
+    pal.setColor(QtGui.QPalette.ColorRole.AlternateBase,    QtGui.QColor("#FAFAFA"))
+    pal.setColor(QtGui.QPalette.ColorRole.Text,             QtGui.QColor("#1E1F22"))
+    pal.setColor(QtGui.QPalette.ColorRole.Button,           QtGui.QColor("#FFFFFF"))
+    pal.setColor(QtGui.QPalette.ColorRole.ButtonText,       QtGui.QColor("#1E1F22"))
+    pal.setColor(QtGui.QPalette.ColorRole.PlaceholderText,  QtGui.QColor("#6C707E"))
+    pal.setColor(QtGui.QPalette.ColorRole.ToolTipBase,      QtGui.QColor("#1E1F22"))
+    pal.setColor(QtGui.QPalette.ColorRole.ToolTipText,      QtGui.QColor("#FFFFFF"))
+    pal.setColor(QtGui.QPalette.ColorRole.Highlight,        QtGui.QColor("#3574F0"))
+    pal.setColor(QtGui.QPalette.ColorRole.HighlightedText,  QtGui.QColor("#FFFFFF"))
+    pal.setColor(QtGui.QPalette.ColorGroup.Disabled,
+                 QtGui.QPalette.ColorRole.WindowText,       QtGui.QColor("#A0A0A0"))
+    pal.setColor(QtGui.QPalette.ColorGroup.Disabled,
+                 QtGui.QPalette.ColorRole.Text,             QtGui.QColor("#A0A0A0"))
+    pal.setColor(QtGui.QPalette.ColorGroup.Disabled,
+                 QtGui.QPalette.ColorRole.ButtonText,       QtGui.QColor("#A0A0A0"))
+    app.setPalette(pal)
+
     app.setStyleSheet(_QSS)
 
 
@@ -299,6 +322,10 @@ QStatusBar::item {
 
 /* QLabel */
 
+QDialog QLabel {
+    color: #6C707E;
+}
+
 QLabel#heading {
     font-size: 18px;
     font-weight: 700;
@@ -337,9 +364,9 @@ QProgressBar::chunk {
 /* QToolTip */
 
 QToolTip {
-    background: #1E1F22;
+    background-color: #1E1F22;
     color: #FFFFFF;
-    border: none;
+    border: 1px solid #1E1F22;
     border-radius: 4px;
     padding: 4px 8px;
     font-size: 9pt;
