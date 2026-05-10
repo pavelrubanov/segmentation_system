@@ -1,3 +1,5 @@
+<img width="1922" height="1112" alt="segmentation_canvas_autosegment_result" src="https://github.com/user-attachments/assets/dcd07a2d-d10d-44f5-8f1f-06e91d07cf5f" />
+
 # segmentation_system
 
 Настольное приложение для сегментации, контурирования и параметрического анализа
