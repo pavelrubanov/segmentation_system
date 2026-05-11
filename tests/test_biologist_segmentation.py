@@ -96,11 +96,12 @@ def predictor():
 @pytest.fixture(scope="session")
 def classifiers() -> dict[str, object]:
     from classifier import get_classifier
+    bb = str(resource_path("models/mobilenet_v3_small.pth"))
     out = {}
     for leaf_type in LEAF_TYPES:
         path = resource_path(f"models/model_{leaf_type}.pkl")
         if path.exists():
-            out[leaf_type] = get_classifier(str(path))
+            out[leaf_type] = get_classifier(str(path), bb)
     return out
 
 

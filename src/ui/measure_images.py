@@ -21,6 +21,7 @@ from .runner import (
 )
 
 _CLASSIFIER_WEIGHTS_DIR = resource_path("models")
+_BACKBONE_WEIGHTS = str(resource_path("models/mobilenet_v3_small.pth"))
 
 
 class ImagesSettingsDialog(SettingsDialog):
@@ -77,7 +78,7 @@ def measure_images(parent: QtWidgets.QWidget, predictor: Predictor) -> None:
 
     s = dlg.settings()
     try:
-        classifier = get_classifier(s.classifier_weights)
+        classifier = get_classifier(s.classifier_weights, _BACKBONE_WEIGHTS)
     except Exception as exc:
         QtWidgets.QMessageBox.critical(
             parent, "Ошибка", f"Не удалось загрузить классификатор: {exc}")

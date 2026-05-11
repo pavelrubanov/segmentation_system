@@ -25,17 +25,18 @@ GOOD_THRESHOLDS: dict[str, float] = {
     "girgensohnii": 0.12,
 }
 
-# Кэш классификаторов по абсолютному пути к pkl: загрузка XGBoost тяжёлая,
-# а в одной сессии один и тот же weights_path запрашивается многократно
+# Кэш классификаторов по (pkl_path, backbone_path): загрузка XGBoost тяжёлая,
+# а в одной сессии тот же набор путей запрашивается многократно
 # (повторные запуски авто-обработки, кнопка авто-сегментации в окне).
-_classifier_cache: dict[str, "LeafClassifier"] = {}
+_classifier_cache: dict[tuple[str, str], "LeafClassifier"] = {}
 
 
-def get_classifier(weights_path: str | Path) -> "LeafClassifier":
-    """Вернуть классификатор по пути к pkl. Загружается один раз за сессию."""
-    key = str(Path(weights_path).resolve())
+def get_classifier(weights_path: str | Path,
+                   backbone_weights: str | Path) -> "LeafClassifier":
+    """Вернуть классификатор по путям к pkl и backbone-весам. Загружается один раз за сессию."""
+    key = (str(Path(weights_path).resolve()), str(Path(backbone_weights).resolve()))
     if (cached := _classifier_cache.get(key)) is None:
-        cached = LeafClassifier(key)
+        cached = LeafClassifier(*key)
         _classifier_cache[key] = cached
     return cached
 
@@ -54,7 +55,8 @@ def find_available_leaf_types(weights_dir: str | Path) -> list[tuple[str, str]]:
 class LeafClassifier:
     """Загружается один раз. Классифицирует препроцессированные кропы."""
 
-    def __init__(self, weights_path: str | Path) -> None:
+    def __init__(self, weights_path: str | Path,
+                 backbone_weights: str | Path) -> None:
         with open(weights_path, "rb") as f:
             blob = pickle.load(f)
         self.model = blob["model"]
@@ -62,6 +64,7 @@ class LeafClassifier:
         self.leaf_type: str = blob["leaf_type"]
         self.good_idx = self.classes.index("good_leaf")
         self.p_good = GOOD_THRESHOLDS[self.leaf_type]
+        self.backbone_weights = backbone_weights
 
     def classify(self, crop: np.ndarray) -> tuple[str, float]:
         """Классифицировать один кроп. Возвращает (class_name, confidence)."""
@@ -75,7 +78,7 @@ class LeafClassifier:
         """
         if not crops:
             return []
-        probs = self.model.predict_proba(mobilenet.encode(crops))
+        probs = self.model.predict_proba(mobilenet.encode(crops, self.backbone_weights))
         good_probs = probs[:, self.good_idx]
         rest = np.delete(probs, self.good_idx, axis=1)
         rest_classes = [c for i, c in enumerate(self.classes) if i != self.good_idx]

@@ -42,13 +42,21 @@ _model: torch.nn.Module | None = None
 _device: torch.device | None = None
 
 
-def _ensure_model(device: str | torch.device | None = None) -> tuple[torch.nn.Module, torch.device]:
+def _ensure_model(weights_path: str | Path,
+                  device: str | torch.device | None = None) -> tuple[torch.nn.Module, torch.device]:
     """Без явного device --- грузит на INFERENCE_DEVICE (CPU). Сборка features
-    передаёт `device='cuda'` явно перед прогоном."""
+    передаёт `device='cuda'` явно перед прогоном.
+
+    weights_path обязателен: грузим веса MobileNetV3-Small напрямую через
+    torch.load, минуя torchvision.models(weights=DEFAULT) → torch.hub. Хаб
+    показывает скачивание через tqdm в stderr, а в windowed-сборке
+    sys.stderr=None и оно падает на None.write() ещё до сети."""
     global _model, _device
     if _model is None:
         device = torch.device(INFERENCE_DEVICE) if device is None else torch.device(device)
-        m = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        m = models.mobilenet_v3_small(weights=None)
+        state = torch.load(weights_path, map_location=device, weights_only=True)
+        m.load_state_dict(state)
         m.classifier = torch.nn.Identity()
         m = m.eval().to(device)
         for p in m.parameters():
@@ -70,12 +78,12 @@ def _fit_to_square(crop: np.ndarray, size: int = INPUT_SIZE) -> np.ndarray:
 
 
 @torch.no_grad()
-def _forward_squares(squares: np.ndarray, batch_size: int) -> np.ndarray:
+def _forward_squares(squares: np.ndarray, batch_size: int,
+                     weights_path: str | Path) -> np.ndarray:
     """Letterbox-нутые [N, INPUT_SIZE, INPUT_SIZE, 3] uint8 → [N, FEATURE_DIM] float32.
 
-    Использует загруженную через `_ensure_model` модель (на её device).
-    """
-    model, dev = _ensure_model()
+    Использует загруженную через `_ensure_model` модель (на её device)."""
+    model, dev = _ensure_model(weights_path)
     mean, std = IMAGENET_MEAN.to(dev), IMAGENET_STD.to(dev)
     out = np.empty((len(squares), FEATURE_DIM), dtype=np.float32)
     for s in range(0, len(squares), batch_size):
@@ -85,12 +93,13 @@ def _forward_squares(squares: np.ndarray, batch_size: int) -> np.ndarray:
     return out
 
 
-def encode(crops: list[np.ndarray], batch_size: int = 32) -> np.ndarray:
+def encode(crops: list[np.ndarray], weights_path: str | Path,
+           batch_size: int = 32) -> np.ndarray:
     """Из списка препроцессированных RGB-кропов получить матрицу признаков [N, FEATURE_DIM]."""
     if not crops:
         return np.empty((0, FEATURE_DIM), dtype=np.float32)
     squares = np.stack([_fit_to_square(c) for c in crops])
-    return _forward_squares(squares, batch_size)
+    return _forward_squares(squares, batch_size, weights_path)
 
 
 # --- одноразовая сборка features.npz из data/ ---
@@ -113,6 +122,7 @@ def _scan_class(cls_dir: Path) -> list[Path]:
 def build_features_db(
     data_dir: Path,
     out_path: Path,
+    weights_path: Path,
     classes: list[str] | None = None,
     batch_size: int = 32,
     n_jobs: int = -1,
@@ -129,7 +139,7 @@ def build_features_db(
         classes = sorted(d.name for d in data_dir.iterdir() if d.is_dir())
 
     train_device = "cuda" if torch.cuda.is_available() else "cpu"
-    model, device = _ensure_model(train_device)
+    model, device = _ensure_model(weights_path, train_device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"MobileNetV3-Small: {n_params:,} параметров (frozen)")
     print(f"Device: {device}  |  input: {INPUT_SIZE}x{INPUT_SIZE}  |  batch: {batch_size}")
@@ -157,7 +167,7 @@ def build_features_db(
         t_pre = time.time() - ts
 
         ts2 = time.time()
-        feats = _forward_squares(squares, batch_size)
+        feats = _forward_squares(squares, batch_size, weights_path)
         t_inf = time.time() - ts2
 
         all_X.append(feats)
@@ -184,11 +194,14 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Сборка features.npz (MobileNetV3-Small)")
     p.add_argument("--data", type=Path, required=True, help="Папка data/<class>/*.png")
     p.add_argument("--out",  type=Path, required=True, help="Путь к features.npz")
+    p.add_argument("--weights", type=Path, required=True,
+                   help="Путь к mobilenet_v3_small.pth (state_dict)")
     p.add_argument("--classes", nargs="*", default=None)
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--n-jobs", type=int, default=-1)
     args = p.parse_args()
-    build_features_db(args.data, args.out, args.classes, args.batch_size, args.n_jobs)
+    build_features_db(args.data, args.out, args.weights,
+                      args.classes, args.batch_size, args.n_jobs)
 
 
 if __name__ == "__main__":

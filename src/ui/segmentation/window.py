@@ -14,6 +14,7 @@ from core.leaf_pipeline import auto_segment
 from ui.style import icon_crosshair, icon_brush, icon_eraser, icon_auto_segment
 
 _CLASSIFIER_WEIGHTS_DIR = resource_path("models")
+_BACKBONE_WEIGHTS = str(resource_path("models/mobilenet_v3_small.pth"))
 
 
 class _AutoSegWorker(QtCore.QThread):
@@ -34,7 +35,7 @@ class _AutoSegWorker(QtCore.QThread):
             pairs = auto_segment(self._image, self._predictor)
             total = len(pairs)
             if self._weights and pairs:
-                clf = get_classifier(self._weights)
+                clf = get_classifier(self._weights, _BACKBONE_WEIGHTS)
                 labels = clf.classify_batch([c for _, c in pairs])
                 pairs = [p for p, (cls, _) in zip(pairs, labels) if cls == "good_leaf"]
             self.done.emit(pairs, total)

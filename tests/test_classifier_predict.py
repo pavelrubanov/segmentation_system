@@ -31,6 +31,11 @@ def _save_pkl(path, model, classes, leaf_type="branch"):
         pickle.dump({"model": model, "classes": list(classes), "leaf_type": leaf_type}, f)
 
 
+# Backbone-веса никогда не подгружаются в тестах (mobilenet.encode замокан).
+# Достаточно передать любую непустую строку, чтобы пройти типизацию.
+_FAKE_BB = "/fake/mobilenet.pth"
+
+
 @pytest.fixture(autouse=True)
 def clear_cache():
     _classifier_cache.clear()
@@ -69,14 +74,14 @@ class TestLeafClassifier:
     def test_loads_classes_and_leaf_type(self, tmp_path):
         path = tmp_path / "model_x.pkl"
         _save_pkl(path, _DummyXgb([0.5, 0.5]), ["good_leaf", "bad_leaf"], "branch")
-        clf = LeafClassifier(path)
+        clf = LeafClassifier(path, _FAKE_BB)
         assert clf.classes == ["good_leaf", "bad_leaf"]
         assert clf.leaf_type == "branch"
 
     def test_classify_batch_empty(self, tmp_path):
         path = tmp_path / "model_x.pkl"
         _save_pkl(path, _DummyXgb([0.5, 0.5, 0.0]), ["good_leaf", "bad_leaf", "non_leaf"])
-        assert LeafClassifier(path).classify_batch([]) == []
+        assert LeafClassifier(path, _FAKE_BB).classify_batch([]) == []
 
     @patch("classifier.predict.mobilenet.encode")
     def test_classify_batch_threshold_and_rest_argmax(self, mock_encode, tmp_path):
@@ -93,7 +98,7 @@ class TestLeafClassifier:
         mock_encode.return_value = np.zeros((2, 576))
         crops = [np.zeros((10, 10, 3), dtype=np.uint8)] * 2
 
-        result = LeafClassifier(path).classify_batch(crops)
+        result = LeafClassifier(path, _FAKE_BB).classify_batch(crops)
         assert result == [("bad_leaf", pytest.approx(0.7)), ("good_leaf", pytest.approx(0.6))]
 
     @patch("classifier.predict.mobilenet.encode")
@@ -108,7 +113,7 @@ class TestLeafClassifier:
             "branch",
         )
         mock_encode.return_value = np.zeros((1, 576))
-        result = LeafClassifier(path).classify_batch([np.zeros((10, 10, 3), dtype=np.uint8)])
+        result = LeafClassifier(path, _FAKE_BB).classify_batch([np.zeros((10, 10, 3), dtype=np.uint8)])
         assert result == [("bad_leaf", pytest.approx(0.42))]
 
     @patch("classifier.predict.mobilenet.encode")
@@ -117,7 +122,7 @@ class TestLeafClassifier:
         _save_pkl(path, _DummyXgb([0.9, 0.05, 0.05]), ["good_leaf", "bad_leaf", "non_leaf"])
         mock_encode.return_value = np.zeros((1, 576))
 
-        label, conf = LeafClassifier(path).classify(np.zeros((10, 10, 3), dtype=np.uint8))
+        label, conf = LeafClassifier(path, _FAKE_BB).classify(np.zeros((10, 10, 3), dtype=np.uint8))
         assert label == "good_leaf"
         assert conf == pytest.approx(0.9)
 
@@ -129,15 +134,20 @@ class TestGetClassifier:
     def test_caches_by_path(self, tmp_path):
         path = tmp_path / "model_x.pkl"
         _save_pkl(path, _DummyXgb([1.0, 0.0, 0.0]), _CLS)
-        assert get_classifier(path) is get_classifier(path)
+        assert get_classifier(path, _FAKE_BB) is get_classifier(path, _FAKE_BB)
 
     def test_different_paths_different_instances(self, tmp_path):
         p1 = tmp_path / "model_a.pkl"; _save_pkl(p1, _DummyXgb([1.0, 0.0, 0.0]), _CLS)
         p2 = tmp_path / "model_b.pkl"; _save_pkl(p2, _DummyXgb([1.0, 0.0, 0.0]), _CLS)
-        assert get_classifier(p1) is not get_classifier(p2)
+        assert get_classifier(p1, _FAKE_BB) is not get_classifier(p2, _FAKE_BB)
 
     def test_relative_and_absolute_path_same_instance(self, tmp_path, monkeypatch):
         path = tmp_path / "model_x.pkl"
         _save_pkl(path, _DummyXgb([1.0, 0.0, 0.0]), _CLS)
         monkeypatch.chdir(tmp_path)
-        assert get_classifier(path.resolve()) is get_classifier("model_x.pkl")
+        assert get_classifier(path.resolve(), _FAKE_BB) is get_classifier("model_x.pkl", _FAKE_BB)
+
+    def test_different_backbones_different_instances(self, tmp_path):
+        path = tmp_path / "model_x.pkl"
+        _save_pkl(path, _DummyXgb([1.0, 0.0, 0.0]), _CLS)
+        assert get_classifier(path, "/a/bb.pth") is not get_classifier(path, "/b/bb.pth")
